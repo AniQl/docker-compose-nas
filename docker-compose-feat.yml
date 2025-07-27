@@ -55,8 +55,8 @@ services:
       - homepage.weight=3
       - homepage.widget.type=nextcloud
       - homepage.widget.url=https://nc.${HOSTNAME}
-      - homepage.widget.username=admin
-      - homepage.widget.password=NEXTCLOUD_PASSWORD_REDACTED
+      - homepage.widget.username=${NEXTCLOUD_USER}
+      - homepage.widget.password=${NEXTCLOUD_PASSWORD}
 
   stalled-download-cleaner:
     build: https://github.com/MattDGTL/sonarr-radarr-queue-cleaner.git
@@ -127,7 +127,7 @@ services:
       - homepage.weight=1
       - homepage.widget.type=portainer
       - homepage.widget.url=http://${SERVER_IP}:9000
-      - homepage.widget.key=PORTAINER_API_KEY_REDACTED
+      - homepage.widget.key=${PORTAINER_API_KEY}
       - homepage.widget.env=2
 
   speedtest-tracker:
@@ -138,7 +138,7 @@ services:
       - PUID=${USER_ID}
       - PGID=${GROUP_ID}
       - TZ=${TIMEZONE}
-      - APP_KEY=base64:L2LLPjOLwu874QJjHSl2gYHgVPpQueOzoa0cD4PRAis=
+      - APP_KEY=${SPEEDTEST_APP_KEY}
       - SPEEDTEST_SCHEDULE=0 */1 * * *
       - SPEEDTEST_SERVERS=40180
     volumes:
@@ -155,7 +155,7 @@ services:
       - homepage.widget.type=speedtest
       - homepage.widget.url=http://${SERVER_IP}:9010/
       - homepage.widget.version=2
-      - homepage.widget.key=SPEEDTEST_API_KEY_REDACTED
+      - homepage.widget.key=${SPEEDTEST_WIDGET_KEY}
       - homepage.widget.bitratePrecision=3
 
   samba:
@@ -169,7 +169,7 @@ services:
       - "445:445"
     volumes:
       - /mnt:/share/folder
-    command: '-u "1000:1000:pirate:pirate:SAMBA_PASSWORD_REDACTED" -s "SmbShare:/share/folder:rw:pirate"'
+    command: '-u "1000:1000:${SAMBA_USER}:${SAMBA_USER}:${SAMBA_PASSWORD}" -s "SmbShare:/share/folder:rw:${SAMBA_USER}"'
     networks:
       - default
 
