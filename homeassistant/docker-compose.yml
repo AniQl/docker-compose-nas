@@ -1,6 +1,15 @@
 services:
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:stable
+    ports:
+      - target: 6666
+        published: 6666
+        protocol: udp
+        mode: host
+      - target: 6667
+        published: 6667
+        protocol: udp
+        mode: host
+    image: ghcr.io/home-assistant/home-assistant:2025.10.1
     container_name: homeassistant
     network_mode: host
     environment:

@@ -1,15 +1,374 @@
 services:
+  nextcloud-db:
+    image: mariadb:10.11
+    container_name: nextcloud-db
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${NEXTCLOUD_DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=${NEXTCLOUD_DB_USER}
+      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+    volumes:
+      - nextcloud-db-data:/var/lib/mysql
+
+  ## ─────────────────────────────────────────────
+  ## 2) Redis for Nextcloud caching & locking
+  ## ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    # (optional) persist the Redis dataset if you like
+    volumes:
+      - redis-data:/data
+
+  ## ─────────────────────────────────────────────
+  ## 3) Nextcloud
+  ## ─────────────────────────────────────────────
+  nextcloud:
+    image: nextcloud:latest
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on:
+      - nextcloud-db
+      - redis
+    environment:
+      - NEXTCLOUD_MOUNT=/mnt/
+      - MYSQL_HOST=nextcloud-db
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=${NEXTCLOUD_DB_USER}
+      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - TZ=${TIMEZONE}
+      - NEXTCLOUD_TRUSTED_PROXIES=traefik
+      - NEXTCLOUD_TRUSTED_DOMAINS=nc.${HOSTNAME}
+      # Redis settings:
+      - REDIS_HOST=redis
+      - REDIS_HOST_PORT=6379
+      # - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}   # if you set one
+    volumes:
+      - nextcloud-data:/var/www/html
+      - /mnt/data:/mnt/data:rw
+      - /mnt/nas1:/mnt/nas1:rw
+      - /home:/home_angelo:rw
+      #- /home:/mnt/host-home:ro
+      #- /mnt:/mnt/host-mnt:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nextcloud.rule=Host(`nc.${HOSTNAME}`)
+      - traefik.http.routers.nextcloud.entrypoints=web-secure
+      - traefik.http.routers.nextcloud.tls=true
+      - traefik.http.routers.nextcloud.tls.certresolver=myresolver
+      - traefik.http.services.nextcloud.loadbalancer.server.port=80
+      - homepage.group=Cloud
+      - homepage.name=Nextcloud
+      - homepage.icon=nextcloud.png
+      - homepage.href=https://nc.${HOSTNAME}
+      - homepage.description=Self-hosted cloud storage & collaboration
+      - homepage.weight=3
+      - homepage.widget.type=nextcloud
+      - homepage.widget.url=https://nc.${HOSTNAME}
+      - homepage.widget.username=admin
+      - homepage.widget.password=NEXTCLOUD_PASSWORD_REDACTED
+  stalled-download-cleaner:
+    build: https://github.com/MattDGTL/sonarr-radarr-queue-cleaner.git
+    container_name: stalled-download-cleaner
+    restart: unless-stopped
+    environment:
+     - SONARR_URL=http://sonarr:8989/sonarr
+     - SONARR_API_KEY=${SONARR_API_KEY}
+     - RADARR_URL=http://radarr:7878/radarr
+     - RADARR_API_KEY=${RADARR_API_KEY}
+     - API_TIMEOUT=6000
+  netdata:
+    image: netdata/netdata:stable
+    container_name: netdata
+    restart: unless-stopped
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    cpu_shares: 90
+    pid: host
+    #network_mode: bridge
+    security_opt:
+      - apparmor:unconfined
+
+    # 1) Add the host docker group inside the container:
+    group_add:
+      - "983"
+
+    # 2) Mount your config directory as read-write (so Netdata can bootstrap it).
+    volumes:
+      - /DATA/AppData/Netdata/config:/etc/netdata      # ← no :ro
+      - /DATA/AppData/Netdata/lib:/var/lib/netdata
+      - /DATA/AppData/Netdata/cache:/var/cache/netdata
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "19999"
+    ports:
+      - "19999:19999"
+    labels:
+    #   # Traefik routing
+    #   - traefik.enable=true
+    #   - traefik.http.routers.netdata.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/netdata`))
+    #   - traefik.http.routers.netdata.entrypoints=web-secure
+    #   - traefik.http.routers.netdata.tls=true
+    #   - traefik.http.routers.netdata.tls.certresolver=myresolver
+    #   - traefik.http.routers.netdata.middlewares=strip-netdata
+    #   - traefik.http.middlewares.strip-netdata.stripprefix.prefixes=/netdata
+    #   - traefik.http.services.netdata.loadbalancer.server.port=19999
+
+      # Homepage autodiscovery
+      - homepage.group=Network
+      - homepage.name=Netdata
+      - homepage.icon=netdata.png
+      - homepage.href=http://${SERVER_IP}:19999
+      - homepage.description=Real-time performance monitoring
+      - homepage.weight=2
+      - homepage.widget.type=netdata
+      - homepage.widget.url=http://${SERVER_IP}:19999
+  portainerr:
+    image: portainer/portainer-ce:2.21.1
+    container_name: portainerr
+    restart: unless-stopped
+    volumes:
+      - /DATA/AppData/portainer:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "9000"    # internal Portainer HTTP port
+      - "9443"    # internal Portainer HTTPS port
+    ports:
+      - "9000:9000"
+    labels:
+      # Traefik routing
+      # - traefik.enable=true
+      # - traefik.http.routers.portainer.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/portainer`))
+      # - traefik.http.routers.portainer.entrypoints=web-secure
+      # - traefik.http.routers.portainer.tls=true
+      # - traefik.http.routers.portainer.tls.certresolver=myresolver
+      # - traefik.http.services.portainer.loadbalancer.server.port=9000
+
+      # Homepage autodiscovery
+      - homepage.group=Network
+      - homepage.name=Portainer
+      - homepage.icon=portainer.png
+      - homepage.href=http://${SERVER_IP}:9000
+      - homepage.description=Lightweight Docker management UI
+      - homepage.weight=1
+      - homepage.widget.type=portainer
+      - homepage.widget.url=http://${SERVER_IP}:9000
+      - homepage.widget.key=PORTAINER_API_KEY_REDACTED
+      - homepage.widget.env=2
+  # … the rest of your services … 
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    container_name: speedtest-tracker
+    restart: unless-stopped
+    environment:
+      # - APP_URL=https://speedtest.${BASE_HOSTNAME}
+      # - ASSET_URL=https://speedtest.${BASE_HOSTNAME}
+      - PUID=${USER_ID}                         # match your host user
+      - PGID=${GROUP_ID}                        # match your host group
+      - TZ=${TIMEZONE}                          # e.g. Europe/Warsaw
+      - APP_KEY=base64:L2LLPjOLwu874QJjHSl2gYHgVPpQueOzoa0cD4PRAis=            # generate one at https://speedtest-tracker.dev :contentReference[oaicite:0]{index=0}
+      - SPEEDTEST_SCHEDULE=0 */1 * * *         # every 12 hours; cron format :contentReference[oaicite:1]{index=1}
+      # optionally:
+      # - APP_URL=http://your.domain/speedtest  # if you need external links to work
+      - SPEEDTEST_SERVERS=40180        # restrict to specific Ookla server IDs
+    volumes:
+      - ${CONFIG_ROOT:-.}/speedtest-tracker:/config
+    ports:
+      - "9010:80"                               # host:container
+    labels:
+      # (optional) if you front it with Traefik
+      # - traefik.enable=true
+      # - traefik.http.routers.speedtest.rule=Host(`https://speedtest.${BASE_HOSTNAME}`)
+      # - traefik.http.services.speedtest.loadbalancer.server.port=80
+
+      # Homepage autodiscovery
+      - homepage.group=Network
+      - homepage.name=Speedtest
+      - homepage.icon=speedtest-tracker.png
+      - homepage.href=http://${SERVER_IP}:9010/
+      - homepage.description=ISP speed monitoring
+      - homepage.weight=5
+      - homepage.widget.type=speedtest          # widget type as per docs :contentReference[oaicite:2]{index=2}
+      - homepage.widget.url=http://${SERVER_IP}:9010/
+      - homepage.widget.version=2               # use version 2 for linuxserver.io image >= 1.2.1
+      - homepage.widget.key=SPEEDTEST_API_KEY_REDACTED
+      - homepage.widget.bitratePrecision=3
+
+  samba:
+    image: elswork/samba
+    environment:
+      TZ: 'Europe/Madrid'
+    networks:
+      - default
+    ports:
+      - "139:139"
+      - "445:445"
+    restart: unless-stopped
+    volumes:
+      - /mnt:/share/folder
+      #- /path/to/be/shared:/share/folder
+    command: '-u "1000:1000:pirate:pirate:SAMBA_PASSWORD_REDACTED" -s "SmbShare:/share/folder:rw:pirate"'
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: ghcr.io/koenkk/zigbee2mqtt
+    restart: always
+    volumes:
+        - ./data:/app/data
+        - /run/udev:/run/udev:ro
+    ports:
+        # Frontend port
+        - 8088:8080
+        - 8089:8089
+    environment:
+        - TZ=Europe/Berlin
+    devices:
+        # Make sure this matched your adapter location
+        - /dev/ttyUSB0:/dev/ttyUSB0
+    labels:
+      # Group & display settings
+        - homepage.group=Home Automation
+        - homepage.name=Zigbee2MQTT
+        - homepage.icon=zigbee2mqtt.png
+        - homepage.href=http://${SERVER_IP}:8089/
+        - homepage.description=Your Zigbee2MQTT web UI
+        - homepage.weight=6
+  mqtt:
+    container_name: mqtt
+    restart: always
+    image: eclipse-mosquitto
+    # environment:
+    #     - PUID=1883
+    #     - PGID=1883
+    ports:
+        - 1883:1883
+        - 9001:9001
+    volumes:
+        - ${CONFIG_ROOT:-.}/mqtt/config:/mosquitto/config:rw
+        - ${CONFIG_ROOT:-.}/mqtt/data:/mosquitto/data:rw
+        - ${CONFIG_ROOT:-.}/mqtt/log:/mosquitto/log:rw
+  matter-server:
+    image: ghcr.io/home-assistant-libs/python-matter-server:8
+    container_name: matter-server
+    restart: unless-stopped
+    # use host network so Matter can do mDNS & binds to 5580 directly
+    network_mode: "host"
+    # persist pairing/fabric state
+    volumes:
+      - ${CONFIG_ROOT:-.}/matter-data:/data
+    environment:
+      - WS_PORT=5580
+  ollama:
+    image: ollama/ollama:rocm
+    container_name: ollama
+    restart: unless-stopped
+    # make your AMD GPU available inside the container
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    environment:
+      # override Navi 22 (6700 XT) into gfx1030 so Ollama will load
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HCC_AMDGPU_TARGET=gfx1030
+      - OLLAMA_ORIGINS=*
+    volumes:
+      - ollama-data:/root/.ollama
+    expose:
+      - "11434"
+    ports:
+      - "11434:11434"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.ollama.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/ollama`))
+      - traefik.http.routers.ollama.entrypoints=web-secure
+      - traefik.http.routers.ollama.tls=true
+      - traefik.http.routers.ollama.tls.certresolver=myresolver
+      - traefik.http.services.ollama.loadbalancer.server.port=11434
+      - traefik.http.routers.ollama.middlewares=ollama-strip
+      - traefik.http.middlewares.ollama-strip.stripPrefix.prefixes=/ollama
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    environment:
+      # point WebUI at the internal Ollama API
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_AUTH=False
+    volumes:
+      - openwebui-data:/app/backend/data
+    ports:
+      - "8080:8080"
+    # expose:
+    #  - "8080"
+    # # NIE DZIALA BO NIE MA BASE URL....
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.open-webui.rule=Host(`ai.${HOSTNAME}`)"
+    #   - "traefik.http.routers.open-webui.entrypoints=web-secure"
+    #   - "traefik.http.routers.open-webui.tls=true"
+    #   - "traefik.http.routers.open-webui.tls.certresolver=myresolver"
+    #   - "traefik.http.services.open-webui.loadbalancer.server.port=8080"
+    #   - traefik.http.routers.webui.middlewares=webui-strip
+    #   - traefik.http.middlewares.webui-strip.stripPrefix.prefixes=/webui
+  
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: always
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    command:
+      - --config
+      - /etc/cloudflared/config.yml
+      - tunnel
+      - run
+    # Mount only the config and the credentials file, both read-only
+    volumes:
+      - ${CLOUDFLARED_DIR}/config.yml:/etc/cloudflared/config.yml:ro
+      - ${CLOUDFLARED_DIR}/tunnel-credentials.json:/etc/cloudflared/CLOUDFLARE_TUNNEL_ID_REDACTED.json:ro
+    depends_on:
+      - traefik
+    labels:
+      # group it under “Network” on your homepage
+      - homepage.group=Network
+      # the display name & icon
+      - homepage.name=Cloudflare Tunnel
+      - homepage.icon=https://raw.githubusercontent.com/homarr-labs/dashboard-icons/refs/heads/main/svg/cloudflare.svg
+      # link out to Cloudflare Zero Trust dashboard
+      - homepage.href=https://one.dash.cloudflare.com/CLOUDFLARE_ACCOUNT_ID_REDACTED/home/quick-start
+      - homepage.description=Shows your tunnel status via Cloudflare API
+      - homepage.weight=4
+      # widget config
+      - homepage.widget.type=cloudflared
+      - homepage.widget.accountid=CLOUDFLARE_ACCOUNT_ID_REDACTED
+      - homepage.widget.tunnelid=CLOUDFLARE_TUNNEL_ID_REDACTED
+      - homepage.widget.key=${CLOUDFLARE_DNS_API_TOKEN}
   traefik:
     image: ghcr.io/traefik/traefik:3.4
     container_name: traefik
     restart: always
     environment:
       - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
-      - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
-      - CLOUDFLARE_ZONE_API_TOKEN=${CLOUDFLARE_ZONE_API_TOKEN}
+      - CF_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
+      - CF_ZONE_API_TOKEN=${CLOUDFLARE_ZONE_API_TOKEN}
       - LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL}
     command:
+      - --log.level=DEBUG       # change to DEBUG for more verbosity
+      - --log.format=text  
       - --ping=true
+      - --api.insecure=true
+      - --api.dashboard=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
@@ -27,9 +386,31 @@ services:
       - --certificatesresolvers.myresolver.acme.caserver=${LETS_ENCRYPT_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       - --certificatesresolvers.myresolver.acme.email=${LETS_ENCRYPT_EMAIL}
       - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
+    labels:
+      # Traefik’s own dashboard (internal service)
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${HOSTNAME}`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=https"
+      - traefik.http.routers.traefik-dashboard.entrypoints=web-secure
+      - traefik.http.routers.traefik-dashboard.tls.certresolver=myresolver
+      - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8096
+
+      # Homepage autodiscovery
+      - homepage.group=Network
+      - homepage.name=Traefik
+      - homepage.icon=traefik.png
+      - homepage.href=https://traefik.${HOSTNAME}
+      - homepage.description=Reverse proxy dashboard
+      - homepage.weight=0
+
+      # Use the official Traefik widget
+      - homepage.widget.type=traefik
+      - homepage.widget.url=http://traefik:8080   
     ports:
       - "80:80"
       - "443:443"
+      - "8199:8080"
     volumes:
       - ${CONFIG_ROOT:-.}/letsencrypt:/letsencrypt
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
@@ -48,7 +429,7 @@ services:
       - TZ=${TIMEZONE}
     volumes:
       - ${CONFIG_ROOT:-.}/sonarr:/config
-      - ${DATA_ROOT}:/data
+      - ${NAS1_ROOT}:/data
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8989/sonarr/ping"]
@@ -78,7 +459,7 @@ services:
       - TZ=${TIMEZONE}
     volumes:
       - ${CONFIG_ROOT:-.}/radarr:/config
-      - ${DATA_ROOT}:/data
+      - ${NAS1_ROOT}:/data
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:7878/radarr/ping"]
@@ -108,7 +489,7 @@ services:
       - TZ=${TIMEZONE}
     volumes:
       - ${CONFIG_ROOT:-.}/lidarr:/config
-      - ${DATA_ROOT}:/data
+      - ${NAS1_ROOT}:/data
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8686/lidarr/ping"]
@@ -140,7 +521,7 @@ services:
       - TZ=${TIMEZONE}
     volumes:
       - ${CONFIG_ROOT:-.}/bazarr/config:/config
-      - ${DATA_ROOT}:/data
+      - ${NAS1_ROOT}:/data
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:6767/bazarr/ping"]
@@ -241,6 +622,36 @@ services:
       - traefik.http.services.flaresolverr.loadbalancer.server.port=8191
     profiles:
       - flaresolverr
+  autobrr:
+    container_name: autobrr
+    image: ghcr.io/autobrr/autobrr:latest
+    restart: always
+    environment:
+      - TZ=${TIMEZONE}
+      - AUTOBRR__BASE_URL=/autobrr/
+    user: ${USER_ID}:${GROUP_ID}
+    volumes:
+      - ${CONFIG_ROOT:-.}/autobrr:/config
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.autobrr-strip.stripprefix.prefixes=/autobrr
+      - traefik.http.middlewares.autobrr-strip.stripprefix.forceSlash=true
+      - traefik.http.routers.autobrr.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/autobrr`))
+      - traefik.http.routers.autobrr.tls=true
+      - traefik.http.routers.autobrr.tls.certresolver=myresolver
+      - traefik.http.services.autobrr.loadbalancer.server.port=7474
+      - traefik.http.routers.autobrr.middlewares=autobrr-strip
+      - homepage.group=Download
+      - homepage.name=Autobrr
+      - homepage.icon=autobrr.png
+      - homepage.href=/autobrr
+      - homepage.description=Torrent download automation
+      - homepage.weight=7
+      - homepage.widget.type=autobrr
+      - homepage.widget.url=http://autobrr:7474
+      - homepage.widget.key=${AUTOBRR_API_KEY}
+    profiles:
+      - autobrr
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:libtorrentv1
     container_name: qbittorrent
@@ -309,14 +720,28 @@ services:
       - PORT_PERSIST=1
       - PORT_SCRIPT=/pia-shared/portupdate-qbittorrent.sh
       - FIREWALL=0
-      - ACTIVE_HEALTHCHECKS=1
-      - RECONNECT=1
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
       - net.ipv6.conf.default.disable_ipv6=1
       - net.ipv6.conf.all.disable_ipv6=1
       - net.ipv6.conf.lo.disable_ipv6=1
+    healthcheck:
+      test: ping -c 1 www.google.com || exit 1
+      interval: 1m
+      timeout: 10s
+      retries: 3
     restart: always
+  cross-seed:
+    image: ghcr.io/cross-seed/cross-seed:latest
+    container_name: cross-seed
+    user: ${USER_ID}:${GROUP_ID}
+    volumes:
+      - ${CONFIG_ROOT:-.}/cross-seed:/config
+      - ${DOWNLOAD_ROOT}:/data/torrents
+    command: daemon
+    restart: always
+    profiles:
+      - cross-seed
   unpackerr:
     image: ghcr.io/unpackerr/unpackerr:latest
     container_name: unpackerr
@@ -336,32 +761,63 @@ services:
     image: ghcr.io/cleanuparr/cleanuparr:latest
     container_name: cleanuparr
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11011/cleanuparr/health"]
+      interval: 1m
+      timeout: 10s
+      start_period: 30s
+      retries: 10
     volumes:
       - ${CONFIG_ROOT:-.}/cleanuparr/logs:/var/logs
       - ${CONFIG_ROOT:-.}/cleanuparr/ignored.txt:/usr/ignored.txt
       - ${CONFIG_ROOT:-.}/cleanuparr/blacklist.json:/usr/blacklist.json
+      - ${CONFIG_ROOT:-.}/cleanuparr:/config
     environment:
       - TZ=${TIMEZONE}
-      - QUEUECLEANER__ENABLED=true
-      - QUEUECLEANER__IMPORT_FAILED_MAX_STRIKES=3
-      - QUEUECLEANER__STALLED_MAX_STRIKES=3
-      - QUEUECLEANER__DOWNLOADING_METADATA_MAX_STRIKES=3
-      - QUEUECLEANER__STALLED_RESET_STRIKES_ON_PROGRESS=true
-      - TRIGGERS__QUEUECLEANER=0 0 0/1 * * ?
-      - CONTENTBLOCKER__ENABLED=true
-      - CONTENTBLOCKER__IGNORED_DOWNLOADS_PATH=/usr/ignored.txt
-      - TRIGGERS__CONTENTBLOCKER=0 0 0/1 * * ?
-      - DOWNLOAD_CLIENT=qBittorrent
-      - QBITTORRENT__URL=http://vpn:8080
-      - QBITTORRENT__PASSWORD=${QBITTORRENT_PASSWORD}
-      - SONARR__ENABLED=true
-      - SONARR__BLOCK__PATH=/usr/blacklist.json
-      - SONARR__INSTANCES__0__URL=http://sonarr:8989/sonarr
-      - SONARR__INSTANCES__0__APIKEY=${SONARR_API_KEY}
-      - RADARR__ENABLED=true
-      - RADARR__BLOCK__PATH=/usr/blacklist.json
-      - RADARR__INSTANCES__0__URL=http://radarr:7878/radarr
-      - RADARR__INSTANCES__0__APIKEY=${RADARR_API_KEY}
+      - PUID=${USER_ID}
+      - PGID=${GROUP_ID}
+      - BASE_PATH=/cleanuparr
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.cleanuparr.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/cleanuparr`))
+      - traefik.http.routers.cleanuparr.tls=true
+      - traefik.http.routers.cleanuparr.tls.certresolver=myresolver
+      - traefik.http.services.cleanuparr.loadbalancer.server.port=11011
+      - homepage.group=Download
+      - homepage.name=Cleanuparr
+      - homepage.icon=cleanuperr.png
+      - homepage.href=/cleanuparr
+      - homepage.description=Cleanuparr
+      - homepage.weight=5
+    profiles:
+      - cleanuparr
+  huntarr:
+    image: ghcr.io/plexguide/huntarr:latest
+    container_name: huntarr
+    restart: always
+    environment:
+      - PUID=${USER_ID}
+      - PGID=${GROUP_ID}
+      - TZ=${TIMEZONE}
+      # Not using Huntarr's base URL feature until this is merged: https://github.com/plexguide/Huntarr.io/pull/760
+      # - BASE_URL=/huntarr
+    volumes:
+      - ${CONFIG_ROOT:-.}/huntarr:/config
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.huntarr.rule=Host(`huntarr.${BASE_HOSTNAME}`)
+      - traefik.http.routers.huntarr.tls=true
+      - traefik.http.routers.huntarr.tls.certresolver=myresolver
+      - traefik.http.services.huntarr.loadbalancer.server.port=9705
+
+      - homepage.group=Download
+      - homepage.name=Huntarr
+      - homepage.icon=huntarr.png
+      - homepage.href=https://huntarr.${BASE_HOSTNAME}
+      - homepage.description=Huntarr
+      - homepage.weight=6
+    profiles:
+      - huntarr
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd:latest
     container_name: sabnzbd
@@ -371,7 +827,7 @@ services:
       - TZ=${TIMEZONE}
     volumes:
       - ${CONFIG_ROOT:-.}/sabnzbd:/config
-      - ${DATA_ROOT}:/data
+      - ${NAS1_ROOT}:/data
     restart: always
     labels:
       - traefik.enable=true
@@ -397,21 +853,28 @@ services:
       - PUID=${USER_ID}
       - PGID=${GROUP_ID}
       - TZ=${TIMEZONE}
-      - JELLYFIN_PublishedServerUrl=${HOSTNAME}/jellyfin
+      - JELLYFIN_PublishedServerUrl=https://jellyfin.${BASE_HOSTNAME}
+      - DOCKER_MODS=linuxserver/mods:jellyfin-amd
+      #- JELLYFIN_PublishedServerUrl=${HOSTNAME}/jellyfin
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/dri/card0:/dev/dri/card0
     volumes:
       - ${CONFIG_ROOT:-.}/jellyfin:/config
-      - ${DATA_ROOT}:/data
+      - ${NAS1_ROOT}:/data
     ports:
       - "7359:7359/udp"
-      - "1900:1900/udp"
+      - "1901:1900/udp"
+      - "8096:8096"
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8096/jellyfin/health"]
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8096/health"]
       interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
-      - traefik.http.routers.jellyfin.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/jellyfin`))
+      #- traefik.http.routers.jellyfin.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/jellyfin`))
+      - traefik.http.routers.jellyfin.rule=(Host(`jellyfin.${BASE_HOSTNAME}`))
       - traefik.http.routers.jellyfin.tls=true
       - traefik.http.routers.jellyfin.entrypoints=web-secure
       - traefik.http.routers.jellyfin.tls.certresolver=myresolver
@@ -419,11 +882,13 @@ services:
       - homepage.group=Media
       - homepage.name=Jellyfin
       - homepage.icon=jellyfin.png
-      - homepage.href=/jellyfin
+      #- homepage.href=/jellyfin
+      - homepage.href=https://jellyfin.${BASE_HOSTNAME}
       - homepage.description=Media server
       - homepage.weight=4
       - homepage.widget.type=jellyfin
-      - homepage.widget.url=http://jellyfin:8096/jellyfin
+      #- homepage.widget.url=http://jellyfin:8096/jellyfin
+      - homepage.widget.url=http://jellyfin:8096
       - homepage.widget.key=${JELLYFIN_API_KEY}
   calibre-web:
     image: lscr.io/linuxserver/calibre-web:latest
@@ -436,7 +901,7 @@ services:
       - OAUTHLIB_RELAX_TOKEN_SCOPE=1
     volumes:
       - ${CONFIG_ROOT:-.}/calibre-web:/config
-      - ${DATA_ROOT}/books:/books
+      - ${NAS1_ROOT}/books:/books
     restart: unless-stopped
     labels:
       - traefik.enable=true
@@ -444,7 +909,7 @@ services:
       - traefik.http.middlewares.calibre-headers.headers.customRequestHeaders.X-Script-Name=/calibre
       - traefik.http.middlewares.calibre-stripprefixregex.stripPrefixRegex.regex=/calibre
       - traefik.http.routers.calibre.middlewares=calibre-headers,calibre-stripprefixregex
-      - traefik.http.routers.calibre.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/calibre`))
+      - traefik.http.routers.calibre.rule=(Host(`${LOCAL_HOSTNAME}`) && PathPrefix(`/calibre`))
       - traefik.http.routers.calibre.tls=true
       - traefik.http.routers.calibre.tls.certresolver=myresolver
       - traefik.http.services.calibre.loadbalancer.server.port=8083
@@ -460,42 +925,6 @@ services:
       - homepage.widget.password=${CALIBRE_PASSWORD}
     profiles:
       - calibre-web
-  decluttarr:
-    image: ghcr.io/manimatter/decluttarr:latest
-    container_name: decluttarr
-    restart: always
-    environment:
-      - PUID=${USER_ID}
-      - PGID=${GROUP_ID}
-      - TZ=${TIMEZONE}
-      - RADARR_URL=http://radarr:7878/radarr
-      - RADARR_KEY=${RADARR_API_KEY}
-      - SONARR_URL=http://sonarr:8989/sonarr
-      - SONARR_KEY=${SONARR_API_KEY}
-      - LIDARR_URL=http://lidarr:8686/lidarr
-      - LIDARR_KEY=${LIDARR_API_KEY}
-      - QBITTORRENT_URL=http://qbittorrent:8080
-      - QBITTORRENT_USERNAME=${QBITTORRENT_USERNAME}
-      - QBITTORRENT_PASSWORD=${QBITTORRENT_PASSWORD}
-      - LOG_LEVEL=${DECLUTTARR_LOG_LEVEL:-INFO}
-      - TEST_RUN=${DECLUTTARR_TEST_RUN:-False}
-      - REMOVE_TIMER=${DECLUTTARR_REMOVE_TIMER:-10}
-      - REMOVE_FAILED=${DECLUTTARR_REMOVE_FAILED:-True}
-      - REMOVE_FAILED_IMPORTS=${DECLUTTARR_REMOVE_FAILED_IMPORTS:-True}
-      - REMOVE_METADATA_MISSING=${DECLUTTARR_REMOVE_METADATA_MISSING:-True}
-      - REMOVE_MISSING_FILES=${DECLUTTARR_REMOVE_MISSING_FILES:-True}
-      - REMOVE_ORPHANS=${DECLUTTARR_REMOVE_ORPHANS:-True}
-      - REMOVE_SLOW=${DECLUTTARR_REMOVE_SLOW:-True}
-      - REMOVE_STALLED=${DECLUTTARR_REMOVE_STALLED:-True}
-      - REMOVE_UNMONITORED=${DECLUTTARR_REMOVE_UNMONITORED:-True}
-      - RUN_PERIODIC_RESCANS=${DECLUTTARR_RUN_PERIODIC_RESCANS:-}
-      - PERMITTED_ATTEMPTS=${DECLUTTARR_PERMITTED_ATTEMPTS:-3}
-      - NO_STALLED_REMOVAL_QBIT_TAG=${DECLUTTARR_REMOVAL_QBIT_TAG:-"stalled"}
-      - MIN_DOWNLOAD_SPEED=${DECLUTTARR_MIN_DOWNLOAD_SPEED:-100}
-      - FAILED_IMPORT_MESSAGE_PATTERNS=${DECLUTTARR_FAILED_IMPORT_MESSAGE_PATTERNS:-}
-      - IGNORED_DOWNLOAD_CLIENTS=${DECLUTTARR_IGNORED_DOWNLOAD_CLIENTS:-}
-    profiles:
-      - decluttarr
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
@@ -513,7 +942,9 @@ services:
       - ${CONFIG_ROOT:-.}/homepage:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${DATA_ROOT}:/data
-    command: [sh, -c, "cp -n /app/config/tpl/*.yaml /app/config && node server.js"]
+    restart: always
+    command:
+      [sh, -c, "cp -n /app/config/tpl/*.yaml /app/config && node server.js"]
     labels:
       - traefik.enable=true
       - traefik.http.routers.homepage.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/`))
@@ -536,7 +967,293 @@ services:
       - AUTOHEAL_CONTAINER_LABEL=all
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  asterisk:
+    image: mlan/asterisk:full    # or :base / :mini; full includes console audio support
+    container_name: asterisk
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      # Optional: reuse Traefik ACME certs for SIP-TLS
+      - ACME_FILE=/acme/acme.json
+      - HOSTNAME=pbx.${HOSTNAME}
+      # Optional: logging verbosity (0..8)
+      - SYSLOG_LEVEL=4
+      # Optional: enable host audio passthrough later if you want (see README)
+      # - PULSE_SERVER=unix:/run/pulse/socket
+      # - PULSE_COOKIE=/run/pulse/cookie
+    ports:
+      - "5060:5060/udp"                # SIP UDP
+      - "5060:5060/tcp"                # SIP TCP
+      - "5061:5061/tcp"                # SIP TLS (if you enable it)
+      - "10000-10099:10000-10099/udp"  # RTP (adjust range if you like)
+    # If you want AutoBan (nftables), uncomment:
+    # cap_add:
+    #   - NET_ADMIN
+    #   - NET_RAW
+    volumes:
+      # Persistent config/state consolidated under /srv (nice for backups)
+      - ${CONFIG_ROOT:-.}/asterisk:/srv
+      # Share Traefik's ACME store so Asterisk can extract SIP TLS certs
+      - ${CONFIG_ROOT:-.}/letsencrypt:/acme:ro
+      # Optional: host audio via PulseAudio (only if you need it)
+      # - ./pulse:/run/pulse:rshared
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - default  
+  wgeasy:
+    image: ghcr.io/wg-easy/wg-easy:nightly
+    container_name: wgeasy
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+
+    volumes:
+      - ${CONFIG_ROOT:-.}/wg-easy:/etc/wireguard
+
+    # WireGuard (UDP) must be exposed directly (Traefik does not proxy this)
+    # ports:
+    #   - "51820:51820/udp"
+    #network_mode: host
+
+    # If you also want LAN access to the UI by port, uncomment:
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+
+    environment:
+      - WG_POST_UP=iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE; iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT
+      - WG_POST_DOWN=iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE; iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT
+
+      - WG_ALLOWED_IPS=0.0.0.0/0,::/0
+      - WG_DEFAULT_DNS=1.1.1.1,8.8.8.8
+
+
+      - TZ=${TIMEZONE}
+
+      # This is what clients connect to (set it to your public DNS name)
+      - WG_HOST=wg.${HOSTNAME}
+      - WG_PORT=51820
+
+      # wg-easy UI listens on this port inside the container
+      - PORT=51821
+
+      # Helps mobile clients stay connected on LTE/Wi-Fi changes
+      - WG_PERSISTENT_KEEPALIVE=25
+
+      # Initial UI login (store password in .env)
+      - INIT_ENABLED=true
+      - INIT_USERNAME=admin
+      - INIT_PASSWORD=${WGEASY_UI_PASSWORD}
+      - ENABLE_PROMETHEUS_METRICS=true
+
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wgeasy.rule=Host(`wg-ui.${HOSTNAME}`)
+      - traefik.http.routers.wgeasy.entrypoints=web-secure
+      - traefik.http.routers.wgeasy.tls=true
+      - traefik.http.routers.wgeasy.tls.certresolver=myresolver
+      - traefik.http.services.wgeasy.loadbalancer.server.port=51821
+
+      # Homepage
+      - homepage.href=https://wg-ui.${HOSTNAME}
+
+      # Homepage autodiscovery + widget
+      - homepage.group=Network
+      - homepage.name=WireGuard VPN
+      - homepage.icon=wireguard.png
+      - homepage.description=VPN access to home
+      - homepage.weight=3
+      - homepage.widget.type=wgeasy
+      # - homepage.widget.url=https://wg-ui.${HOSTNAME}
+      - homepage.widget.url=http://wgeasy:51821
+      - homepage.widget.version=2
+      - homepage.widget.username=admin
+      - homepage.widget.password=${WGEASY_UI_PASSWORD}
+      - homepage.widget.threshold=2
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_RENDERING_SERVER_URL=http://grafana-image-renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+    volumes:
+      - /DATA/AppData/Grafana/data:/var/lib/grafana
+      - /DATA/AppData/Grafana/provisioning:/etc/grafana/provisioning
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+      - grafana-image-renderer
+    labels:
+      # Traefik
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`grafana.${HOSTNAME}`)
+      - traefik.http.routers.grafana.entrypoints=web-secure
+      - traefik.http.routers.grafana.tls=true
+      - traefik.http.routers.grafana.tls.certresolver=myresolver
+      - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+      # Homepage
+      - homepage.group=Network
+      - homepage.name=Grafana
+      - homepage.icon=grafana.png
+      - homepage.href=https://grafana.${HOSTNAME}
+      - homepage.description=Metrics dashboards
+      - homepage.weight=6
+      - homepage.widget.type=grafana
+      - homepage.widget.url=http://grafana:3000
+      - homepage.widget.username=admin
+      - homepage.widget.password=${GRAFANA_ADMIN_PASSWORD}
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - /DATA/AppData/Prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /DATA/AppData/Prometheus/data:/prometheus
+    expose:
+      - "9090"
+    depends_on:
+      - netdata
+    labels:
+      # Traefik
+      - traefik.enable=true
+      - traefik.http.routers.prometheus.rule=Host(`prometheus.${HOSTNAME}`)
+      - traefik.http.routers.prometheus.entrypoints=web-secure
+      - traefik.http.routers.prometheus.tls=true
+      - traefik.http.routers.prometheus.tls.certresolver=myresolver
+      - traefik.http.services.prometheus.loadbalancer.server.port=9090
+
+      # Homepage
+      - homepage.group=Network
+      - homepage.name=Prometheus
+      - homepage.icon=prometheus.png
+      - homepage.href=https://prometheus.${HOSTNAME}
+      - homepage.description=Metrics backend
+      - homepage.weight=7
+  grafana-image-renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: grafana-image-renderer
+    restart: unless-stopped
+    environment:
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8081
+    expose:
+      - "8081"
+    labels:
+      # Homepage (no Traefik)
+      - homepage.group=Network
+      - homepage.name=Grafana Renderer
+      - homepage.icon=grafana.png
+      - homepage.href=http://grafana-image-renderer:8081
+      - homepage.description=PNG rendering service for Grafana
+      - homepage.weight=8
+  grafana-discord-daily:
+    image: python:3.12-slim
+    container_name: grafana-discord-daily
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE}
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_TOKEN=${GRAFANA_TOKEN}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DASH_UID=${GRAFANA_DASH_UID}
+      - PANEL_IDS=${GRAFANA_PANEL_IDS:-all}
+      - FROM=now-12h
+      - TO=now
+    volumes:
+      - /DATA/AppData/GrafanaDiscordDaily:/app
+    working_dir: /app
+    command: >
+      bash -lc "
+        set -e;
+        apt-get update &&
+        apt-get install -y --no-install-recommends cron ca-certificates &&
+        pip install --no-cache-dir requests &&
+
+        {
+          echo 'SHELL=/bin/sh'
+          echo 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+          echo \"TZ=$$TZ\"
+          echo \"GRAFANA_URL=$$GRAFANA_URL\"
+          echo \"GRAFANA_TOKEN=$$GRAFANA_TOKEN\"
+          echo \"DISCORD_WEBHOOK_URL=$$DISCORD_WEBHOOK_URL\"
+          echo \"DASH_UID=$$DASH_UID\"
+          echo \"PANEL_IDS=$$PANEL_IDS\"
+          echo \"FROM=$$FROM\"
+          echo \"TO=$$TO\"
+          echo '0 0,12 * * * root /usr/local/bin/python3 /app/post.py >> /app/cron.log 2>&1'
+        } > /etc/cron.d/post &&
+
+        chmod 0644 /etc/cron.d/post &&
+        cron -f
+      "
+    depends_on:
+      - grafana
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: frigate
+    restart: unless-stopped
+
+    devices:
+      - /dev/dri:/dev/dri
+
+    shm_size: "512mb"
+
+    environment:
+      - TZ=${TIMEZONE}
+      - LIBVA_DRIVER_NAME=radeonsi
+
+    volumes:
+      - ${CONFIG_ROOT:-.}/frigate:/config
+      - ${NAS1_ROOT:-/DATA}/frigate:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+
+    expose:
+      - "5000"
+
+    labels:
+      # ── Traefik ─────────────────────────────
+      - traefik.enable=true
+      - traefik.http.routers.frigate.rule=Host(`cam.${HOSTNAME}`)
+      - traefik.http.routers.frigate.entrypoints=web-secure
+      - traefik.http.routers.frigate.tls=true
+      - traefik.http.routers.frigate.tls.certresolver=myresolver
+      - traefik.http.services.frigate.loadbalancer.server.port=5000
+
+      # ── Homepage ────────────────────────────
+      - homepage.group=Security
+      - homepage.name=Frigate
+      - homepage.icon=frigate.png
+      - homepage.href=https://cam.${HOSTNAME}
+      - homepage.description=AI NVR (VAAPI decode on AMD)
+      - homepage.weight=1
+      - homepage.widget.type=frigate
+      - homepage.widget.url=http://frigate:5000
+
 
 networks:
   default:
     name: docker-compose-nas
+
+volumes:
+  ollama-data:
+  openwebui-data:
+  mqtt-config:
+  mqtt-data:
+  mqtt-log:
+  nextcloud-data:
+  nextcloud-db-data:
+  redis-data:
