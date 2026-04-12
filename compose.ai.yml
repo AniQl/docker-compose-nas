@@ -1,0 +1,70 @@
+# AI / LLM stack
+# Services: Ollama (AMD ROCm inference), Open WebUI
+#
+# Required .env vars:
+#   (none beyond base vars — Ollama has no auth by default)
+#
+# GPU notes:
+#   Requires AMD GPU with ROCm support. HSA_OVERRIDE_GFX_VERSION targets Navi 22 (RX 6700 XT).
+#   Adjust HSA_OVERRIDE_GFX_VERSION / HCC_AMDGPU_TARGET for your specific GPU.
+
+services:
+
+  ollama:
+    image: ollama/ollama:rocm
+    container_name: ollama
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    environment:
+      # Override GFX version for Navi 22 (RX 6700 XT) — adjust for your GPU
+      HSA_OVERRIDE_GFX_VERSION: "10.3.0"
+      HCC_AMDGPU_TARGET: "gfx1030"
+      OLLAMA_ORIGINS: "*"
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.ollama.rule: "Host(`${HOSTNAME}`) && PathPrefix(`/ollama`)"
+      traefik.http.routers.ollama.entrypoints: "web-secure"
+      traefik.http.routers.ollama.tls: "true"
+      traefik.http.routers.ollama.tls.certresolver: "myresolver"
+      traefik.http.services.ollama.loadbalancer.server.port: "11434"
+      traefik.http.routers.ollama.middlewares: "ollama-strip"
+      traefik.http.middlewares.ollama-strip.stripPrefix.prefixes: "/ollama"
+      # Homepage
+      homepage.group: "AI"
+      homepage.name: "Ollama"
+      homepage.icon: "ollama.png"
+      homepage.href: "https://${HOSTNAME}/ollama"
+      homepage.description: "Local LLM inference (AMD ROCm)"
+      homepage.weight: "0"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      WEBUI_AUTH: "False"
+    volumes:
+      - openwebui-data:/app/backend/data
+    ports:
+      - "8080:8080"
+    labels:
+      # Homepage
+      homepage.group: "AI"
+      homepage.name: "Open WebUI"
+      homepage.icon: "openwebui.png"
+      homepage.href: "http://${SERVER_IP}:8080"
+      homepage.description: "Web UI for Ollama LLM"
+      homepage.weight: "1"
+
+volumes:
+  ollama-data:
+  openwebui-data:

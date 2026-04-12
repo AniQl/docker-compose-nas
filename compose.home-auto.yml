@@ -1,0 +1,61 @@
+# Home Automation stack
+# Services: MQTT broker (Mosquitto), Zigbee2MQTT, Matter Server
+#
+# Note: Home Assistant itself is in homeassistant/docker-compose.yml (upstream managed).
+#
+# Required .env vars:
+#   ZIGBEE_ADAPTER_PATH   — host device path for Zigbee adapter (default: /dev/ttyUSB0)
+#   SERVER_IP             — LAN IP of the host (for homepage direct-port links)
+
+services:
+
+  mqtt:
+    image: eclipse-mosquitto
+    container_name: mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ${CONFIG_ROOT:-.}/mqtt/config:/mosquitto/config:rw
+      - ${CONFIG_ROOT:-.}/mqtt/data:/mosquitto/data:rw
+      - ${CONFIG_ROOT:-.}/mqtt/log:/mosquitto/log:rw
+    labels:
+      homepage.group: "Home Automation"
+      homepage.name: "MQTT"
+      homepage.icon: "mosquitto.png"
+      homepage.href: "http://${SERVER_IP}:9001"
+      homepage.description: "MQTT broker"
+      homepage.weight: "5"
+
+  zigbee2mqtt:
+    image: ghcr.io/koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt
+    restart: unless-stopped
+    volumes:
+      - ${CONFIG_ROOT:-.}/zigbee2mqtt:/app/data
+      - /run/udev:/run/udev:ro
+    ports:
+      - "8088:8080"   # Zigbee2MQTT frontend
+    environment:
+      TZ: "${TIMEZONE}"
+    devices:
+      - "${ZIGBEE_ADAPTER_PATH:-/dev/ttyUSB0}:/dev/ttyUSB0"
+    labels:
+      homepage.group: "Home Automation"
+      homepage.name: "Zigbee2MQTT"
+      homepage.icon: "zigbee2mqtt.png"
+      homepage.href: "http://${SERVER_IP}:8088"
+      homepage.description: "Zigbee coordinator bridge"
+      homepage.weight: "6"
+
+  matter-server:
+    image: ghcr.io/home-assistant-libs/python-matter-server:8
+    container_name: matter-server
+    restart: unless-stopped
+    # Host networking required for mDNS/Matter fabric discovery and port 5580
+    network_mode: "host"
+    volumes:
+      - ${CONFIG_ROOT:-.}/matter-data:/data
+    environment:
+      WS_PORT: "5580"

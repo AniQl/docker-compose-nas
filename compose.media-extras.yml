@@ -1,0 +1,128 @@
+# Media extras
+# Services: Autobrr, Cleanuparr, Huntarr, Cross-Seed, Stalled-Download-Cleaner
+#
+# All services here are profile-gated (except stalled-download-cleaner).
+# Enable them by adding to COMPOSE_PROFILES in .env.
+#
+# Required .env vars:
+#   AUTOBRR_API_KEY        — Autobrr API key (for homepage widget)
+#   HUNTARR_HOSTNAME       — subdomain for Huntarr (e.g. huntarr.example.com)
+
+services:
+
+  autobrr:
+    image: ghcr.io/autobrr/autobrr:latest
+    container_name: autobrr
+    restart: unless-stopped
+    user: "${USER_ID}:${GROUP_ID}"
+    environment:
+      TZ: "${TIMEZONE}"
+      AUTOBRR__BASE_URL: "/autobrr/"
+    volumes:
+      - ${CONFIG_ROOT:-.}/autobrr:/config
+    labels:
+      traefik.enable: "true"
+      traefik.http.middlewares.autobrr-strip.stripprefix.prefixes: "/autobrr"
+      traefik.http.middlewares.autobrr-strip.stripprefix.forceSlash: "true"
+      traefik.http.routers.autobrr.rule: "Host(`${HOSTNAME}`) && PathPrefix(`/autobrr`)"
+      traefik.http.routers.autobrr.tls: "true"
+      traefik.http.routers.autobrr.tls.certresolver: "myresolver"
+      traefik.http.services.autobrr.loadbalancer.server.port: "7474"
+      traefik.http.routers.autobrr.middlewares: "autobrr-strip"
+      # Homepage
+      homepage.group: "Download"
+      homepage.name: "Autobrr"
+      homepage.icon: "autobrr.png"
+      homepage.href: "/autobrr"
+      homepage.description: "Torrent download automation"
+      homepage.weight: "7"
+      homepage.widget.type: "autobrr"
+      homepage.widget.url: "http://autobrr:7474"
+      homepage.widget.key: "${AUTOBRR_API_KEY}"
+    profiles:
+      - autobrr
+
+  cleanuparr:
+    image: ghcr.io/cleanuparr/cleanuparr:latest
+    container_name: cleanuparr
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11011/cleanuparr/health"]
+      interval: 1m
+      timeout: 10s
+      start_period: 30s
+      retries: 10
+    volumes:
+      - ${CONFIG_ROOT:-.}/cleanuparr/logs:/var/logs
+      - ${CONFIG_ROOT:-.}/cleanuparr/ignored.txt:/usr/ignored.txt
+      - ${CONFIG_ROOT:-.}/cleanuparr/blacklist.json:/usr/blacklist.json
+      - ${CONFIG_ROOT:-.}/cleanuparr:/config
+    environment:
+      TZ: "${TIMEZONE}"
+      PUID: "${USER_ID}"
+      PGID: "${GROUP_ID}"
+      BASE_PATH: "/cleanuparr"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.cleanuparr.rule: "Host(`${HOSTNAME}`) && PathPrefix(`/cleanuparr`)"
+      traefik.http.routers.cleanuparr.tls: "true"
+      traefik.http.routers.cleanuparr.tls.certresolver: "myresolver"
+      traefik.http.services.cleanuparr.loadbalancer.server.port: "11011"
+      # Homepage
+      homepage.group: "Download"
+      homepage.name: "Cleanuparr"
+      homepage.icon: "cleanuperr.png"
+      homepage.href: "/cleanuparr"
+      homepage.description: "Download queue cleanup"
+      homepage.weight: "5"
+    profiles:
+      - cleanuparr
+
+  huntarr:
+    image: ghcr.io/plexguide/huntarr:latest
+    container_name: huntarr
+    restart: unless-stopped
+    environment:
+      PUID: "${USER_ID}"
+      PGID: "${GROUP_ID}"
+      TZ: "${TIMEZONE}"
+    volumes:
+      - ${CONFIG_ROOT:-.}/huntarr:/config
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.huntarr.rule: "Host(`${HUNTARR_HOSTNAME}`)"
+      traefik.http.routers.huntarr.tls: "true"
+      traefik.http.routers.huntarr.tls.certresolver: "myresolver"
+      traefik.http.services.huntarr.loadbalancer.server.port: "9705"
+      # Homepage
+      homepage.group: "Download"
+      homepage.name: "Huntarr"
+      homepage.icon: "huntarr.png"
+      homepage.href: "https://${HUNTARR_HOSTNAME}"
+      homepage.description: "Media hunting automation"
+      homepage.weight: "6"
+    profiles:
+      - huntarr
+
+  cross-seed:
+    image: ghcr.io/cross-seed/cross-seed:latest
+    container_name: cross-seed
+    restart: unless-stopped
+    user: "${USER_ID}:${GROUP_ID}"
+    volumes:
+      - ${CONFIG_ROOT:-.}/cross-seed:/config
+      - ${DOWNLOAD_ROOT}:/data/torrents
+    command: daemon
+    profiles:
+      - cross-seed
+
+  stalled-download-cleaner:
+    build: https://github.com/MattDGTL/sonarr-radarr-queue-cleaner.git
+    container_name: stalled-download-cleaner
+    restart: unless-stopped
+    environment:
+      SONARR_URL: "http://sonarr:8989/sonarr"
+      SONARR_API_KEY: "${SONARR_API_KEY}"
+      RADARR_URL: "http://radarr:7878/radarr"
+      RADARR_API_KEY: "${RADARR_API_KEY}"
+      API_TIMEOUT: "6000"

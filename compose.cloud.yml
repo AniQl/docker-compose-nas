@@ -1,0 +1,160 @@
+# Cloud / Remote Access stack
+# Services: Nextcloud (+ MariaDB + Redis), Cloudflare Tunnel, WireGuard (wg-easy)
+#
+# Required .env vars:
+#   NEXTCLOUD_DB_ROOT_PASSWORD  — MariaDB root password
+#   NEXTCLOUD_DB_USER           — MariaDB Nextcloud user
+#   NEXTCLOUD_DB_PASSWORD       — MariaDB Nextcloud user password
+#   CLOUDFLARE_ACCOUNT_ID       — Cloudflare account ID (for homepage widget)
+#   CLOUDFLARE_TUNNEL_ID        — Cloudflare tunnel UUID
+#   CLOUDFLARED_CONFIG_PATH     — path to cloudflared config.yml (default: ~/.cloudflared/config.yml)
+#   CLOUDFLARED_CREDS_PATH      — path to tunnel credentials JSON
+#   WGEASY_UI_PASSWORD          — wg-easy UI login password
+
+services:
+
+  nextcloud-db:
+    image: mariadb:10.11
+    container_name: nextcloud-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${NEXTCLOUD_DB_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "nextcloud"
+      MYSQL_USER: "${NEXTCLOUD_DB_USER}"
+      MYSQL_PASSWORD: "${NEXTCLOUD_DB_PASSWORD}"
+    volumes:
+      - nextcloud-db-data:/var/lib/mysql
+
+  nextcloud-redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    volumes:
+      - nextcloud-redis-data:/data
+
+  nextcloud:
+    image: nextcloud:latest
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+    environment:
+      NEXTCLOUD_MOUNT: "/mnt/"
+      MYSQL_HOST: "nextcloud-db"
+      MYSQL_DATABASE: "nextcloud"
+      MYSQL_USER: "${NEXTCLOUD_DB_USER}"
+      MYSQL_PASSWORD: "${NEXTCLOUD_DB_PASSWORD}"
+      TZ: "${TIMEZONE}"
+      NEXTCLOUD_TRUSTED_PROXIES: "traefik"
+      NEXTCLOUD_TRUSTED_DOMAINS: "nc.${BASE_HOSTNAME}"
+      REDIS_HOST: "nextcloud-redis"
+      REDIS_HOST_PORT: "6379"
+    volumes:
+      - nextcloud-data:/var/www/html
+      - /mnt/data:/mnt/data:rw
+      - /mnt/nas1:/mnt/nas1:rw
+      - /home:/home_angelo:rw
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.nextcloud.rule: "Host(`nc.${BASE_HOSTNAME}`)"
+      traefik.http.routers.nextcloud.entrypoints: "web-secure"
+      traefik.http.routers.nextcloud.tls: "true"
+      traefik.http.routers.nextcloud.tls.certresolver: "myresolver"
+      traefik.http.services.nextcloud.loadbalancer.server.port: "80"
+      # Homepage
+      homepage.group: "Cloud"
+      homepage.name: "Nextcloud"
+      homepage.icon: "nextcloud.png"
+      homepage.href: "https://nc.${BASE_HOSTNAME}"
+      homepage.description: "Self-hosted cloud storage & collaboration"
+      homepage.weight: "3"
+      homepage.widget.type: "nextcloud"
+      homepage.widget.url: "https://nc.${BASE_HOSTNAME}"
+      homepage.widget.username: "${NEXTCLOUD_ADMIN_USER:-admin}"
+      homepage.widget.password: "${NEXTCLOUD_ADMIN_PASSWORD}"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    command:
+      - --config
+      - /etc/cloudflared/config.yml
+      - tunnel
+      - run
+    # Mount the entire cloudflared config directory — keeps config.yml and credentials JSON together.
+    # CLOUDFLARED_DIR defaults to ~/.cloudflared. Override in .env if your config lives elsewhere.
+    volumes:
+      - ${CLOUDFLARED_DIR:-~/.cloudflared}:/etc/cloudflared:ro
+    depends_on:
+      - traefik
+    labels:
+      homepage.group: "Network"
+      homepage.name: "Cloudflare Tunnel"
+      homepage.icon: "cloudflare.png"
+      homepage.href: "https://one.dash.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/home/quick-start"
+      homepage.description: "Cloudflare Zero Trust tunnel"
+      homepage.weight: "4"
+      homepage.widget.type: "cloudflared"
+      homepage.widget.accountid: "${CLOUDFLARE_ACCOUNT_ID}"
+      homepage.widget.tunnelid: "${CLOUDFLARE_TUNNEL_ID}"
+      homepage.widget.key: "${CLOUDFLARE_DNS_API_TOKEN}"
+
+  wgeasy:
+    image: ghcr.io/wg-easy/wg-easy:nightly
+    container_name: wgeasy
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ${CONFIG_ROOT:-.}/wg-easy:/etc/wireguard
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    environment:
+      TZ: "${TIMEZONE}"
+      WG_HOST: "wg.${BASE_HOSTNAME}"
+      WG_PORT: "51820"
+      PORT: "51821"
+      WG_POST_UP: "iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE; iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT"
+      WG_POST_DOWN: "iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE; iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT"
+      WG_ALLOWED_IPS: "0.0.0.0/0,::/0"
+      WG_DEFAULT_DNS: "1.1.1.1,8.8.8.8"
+      WG_PERSISTENT_KEEPALIVE: "25"
+      INIT_ENABLED: "true"
+      INIT_USERNAME: "admin"
+      INIT_PASSWORD: "${WGEASY_UI_PASSWORD}"
+      ENABLE_PROMETHEUS_METRICS: "true"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.wgeasy.rule: "Host(`wg-ui.${BASE_HOSTNAME}`)"
+      traefik.http.routers.wgeasy.entrypoints: "web-secure"
+      traefik.http.routers.wgeasy.tls: "true"
+      traefik.http.routers.wgeasy.tls.certresolver: "myresolver"
+      traefik.http.services.wgeasy.loadbalancer.server.port: "51821"
+      # Homepage
+      homepage.group: "Network"
+      homepage.name: "WireGuard VPN"
+      homepage.icon: "wireguard.png"
+      homepage.href: "https://wg-ui.${BASE_HOSTNAME}"
+      homepage.description: "VPN access to home"
+      homepage.weight: "3"
+      homepage.widget.type: "wgeasy"
+      homepage.widget.url: "http://wgeasy:51821"
+      homepage.widget.version: "2"
+      homepage.widget.username: "admin"
+      homepage.widget.password: "${WGEASY_UI_PASSWORD}"
+      homepage.widget.threshold: "2"
+
+volumes:
+  nextcloud-data:
+  nextcloud-db-data:
+  nextcloud-redis-data:

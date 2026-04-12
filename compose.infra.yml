@@ -1,0 +1,127 @@
+# Infrastructure / Home services
+# Services: Portainer, Speedtest Tracker, Samba, Asterisk PBX, Frigate NVR
+#
+# Required .env vars:
+#   SERVER_IP               — LAN IP of the host (for direct-port homepage links)
+#   PORTAINER_API_KEY       — Portainer API key (for homepage widget)
+#   SPEEDTEST_APP_KEY       — base64 app key for speedtest-tracker
+#   SPEEDTEST_API_KEY       — API key for speedtest-tracker homepage widget
+#   SAMBA_USER_PASS         — Samba credentials string (format: UID:GID:user:pass:...)
+#   SAMBA_SHARE_CONFIG      — Samba share config string (format: name:path:rw:user)
+#   DOCKER_GID              — GID of the docker group on host (for Portainer socket access)
+
+services:
+
+  portainer:
+    image: portainer/portainer-ce:2.21.1
+    container_name: portainerr
+    restart: unless-stopped
+    volumes:
+      - ${CONFIG_ROOT:-.}/portainer:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "9000:9000"
+    labels:
+      homepage.group: "Network"
+      homepage.name: "Portainer"
+      homepage.icon: "portainer.png"
+      homepage.href: "http://${SERVER_IP}:9000"
+      homepage.description: "Docker management UI"
+      homepage.weight: "1"
+      homepage.widget.type: "portainer"
+      homepage.widget.url: "http://${SERVER_IP}:9000"
+      homepage.widget.key: "${PORTAINER_API_KEY}"
+      homepage.widget.env: "2"
+
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    container_name: speedtest-tracker
+    restart: unless-stopped
+    environment:
+      PUID: "${USER_ID}"
+      PGID: "${GROUP_ID}"
+      TZ: "${TIMEZONE}"
+      APP_KEY: "${SPEEDTEST_APP_KEY}"
+      SPEEDTEST_SCHEDULE: "0 */1 * * *"
+      SPEEDTEST_SERVERS: "${SPEEDTEST_SERVER_IDS:-}"
+    volumes:
+      - ${CONFIG_ROOT:-.}/speedtest-tracker:/config
+    ports:
+      - "9010:80"
+    labels:
+      homepage.group: "Network"
+      homepage.name: "Speedtest"
+      homepage.icon: "speedtest-tracker.png"
+      homepage.href: "http://${SERVER_IP}:9010/"
+      homepage.description: "ISP speed monitoring"
+      homepage.weight: "5"
+      homepage.widget.type: "speedtest"
+      homepage.widget.url: "http://${SERVER_IP}:9010/"
+      homepage.widget.version: "2"
+      homepage.widget.key: "${SPEEDTEST_API_KEY}"
+      homepage.widget.bitratePrecision: "3"
+
+  samba:
+    image: elswork/samba
+    container_name: samba
+    restart: unless-stopped
+    environment:
+      TZ: "${TIMEZONE}"
+    ports:
+      - "139:139"
+      - "445:445"
+    volumes:
+      - /mnt:/share/folder
+    # Configure users and shares via .env — avoids hardcoded credentials
+    # Format: -u "UID:GID:username:password:role" -s "ShareName:/share/folder:rw:username"
+    command: '${SAMBA_CONFIG:--u "1000:1000:user:changeme:pirate" -s "SmbShare:/share/folder:rw:user"}'
+
+  asterisk:
+    image: mlan/asterisk:full
+    container_name: asterisk
+    restart: unless-stopped
+    environment:
+      TZ: "${TIMEZONE}"
+      ACME_FILE: "/acme/acme.json"
+      HOSTNAME: "pbx.${BASE_HOSTNAME}"
+      SYSLOG_LEVEL: "4"
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "5061:5061/tcp"
+      - "10000-10099:10000-10099/udp"
+    volumes:
+      - ${CONFIG_ROOT:-.}/asterisk:/srv
+      - ${CONFIG_ROOT:-.}/letsencrypt:/acme:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: frigate
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+    shm_size: "512mb"
+    environment:
+      TZ: "${TIMEZONE}"
+      LIBVA_DRIVER_NAME: "radeonsi"
+    volumes:
+      - ${CONFIG_ROOT:-.}/frigate:/config
+      - ${NAS1_ROOT}/frigate:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.frigate.rule: "Host(`cam.${BASE_HOSTNAME}`)"
+      traefik.http.routers.frigate.entrypoints: "web-secure"
+      traefik.http.routers.frigate.tls: "true"
+      traefik.http.routers.frigate.tls.certresolver: "myresolver"
+      traefik.http.services.frigate.loadbalancer.server.port: "5000"
+      # Homepage
+      homepage.group: "Security"
+      homepage.name: "Frigate"
+      homepage.icon: "frigate.png"
+      homepage.href: "https://cam.${BASE_HOSTNAME}"
+      homepage.description: "AI NVR (VAAPI/AMD)"
+      homepage.weight: "1"
+      homepage.widget.type: "frigate"
+      homepage.widget.url: "http://frigate:5000"
