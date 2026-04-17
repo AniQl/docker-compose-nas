@@ -23,3 +23,32 @@ docker-compose.override.yml
 /cleanuparr/*
 !/cleanuparr/blacklist.json
 !/cleanuparr/logs/.gitkeep
+
+# Service runtime data directories
+/autobrr/
+/cross-seed/
+/data/
+/frigate/
+/huntarr/
+/matter-data/
+/mqtt-config/
+/mqtt-data/
+/speedtest-tracker/
+/wg-easy/
+
+# Symlinks to host data paths (machine-specific)
+/grafana
+/grafana-discord-daily
+/netdata
+/portainer
+/prometheus
+/zigbee2mqtt
+
+# Runtime snapshots and diff output
+running*.json
+running*.env.json
+desired.yml
+desired.slim.yml
+compose.verbose.txt
+compose-diff-*/
+home_server.zip
