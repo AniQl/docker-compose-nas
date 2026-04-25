@@ -422,7 +422,6 @@ services:
       - ${DATA_ROOT}:/data
     ports:
       - "7359:7359/udp"
-      - "1900:1900/udp"
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8096/jellyfin/health"]

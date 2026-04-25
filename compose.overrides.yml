@@ -86,6 +86,7 @@ services:
       - /dev/dri/card0:/dev/dri/card0
     ports:
       - "8096:8096"
+      - "1901:1900/udp"  # 1900 held by homeassistant (network_mode: host)
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8096/health"]
       interval: 1m
