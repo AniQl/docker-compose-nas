@@ -14,7 +14,7 @@ services:
 
   portainer:
     image: portainer/portainer-ce:2.21.1
-    container_name: portainerr
+    container_name: portainer
     restart: unless-stopped
     volumes:
       - ${CONFIG_ROOT:-.}/portainer:/data
