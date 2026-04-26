@@ -129,6 +129,15 @@ services:
     labels:
       traefik.http.routers.calibre.rule: "Host(`${LOCAL_HOSTNAME}`) && PathPrefix(`/calibre`)"
 
+  # ─── Homepage ─────────────────────────────────────────────────────────────
+  # Changes vs upstream:
+  #   - Additional SSD mount so both storages appear in disk usage widgets
+  #     /data      → /mnt/nas1  (HDD/NAS, from base via DATA_ROOT)
+  #     /data/ssd  → /mnt/data  (SSD, added here)
+  homepage:
+    volumes:
+      - /mnt/data:/data/ssd
+
   # ─── Healthcheck interval bumps ───────────────────────────────────────────
   # Upstream uses 30s; bumped to 1m to reduce log noise on a stable homeserver.
   sonarr:
