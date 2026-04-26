@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: ghcr.io/traefik/traefik:3.3
+    image: ghcr.io/traefik/traefik:3.6
     container_name: traefik
     restart: always
     environment:
@@ -17,10 +17,6 @@ services:
       - --entrypoints.web.http.redirections.entryPoint.to=web-secure
       - --entrypoints.web.http.redirections.entryPoint.scheme=https
       - --entrypoints.web.http.redirections.entrypoint.permanent=true
-      - --experimental.plugins.rewrite-body.modulename=github.com/packruler/rewrite-body
-      - --experimental.plugins.rewrite-body.version=v1.2.0
-      - --experimental.plugins.rewriteHeaders.modulename=github.com/XciD/traefik-plugin-rewrite-headers
-      - --experimental.plugins.rewriteHeaders.version=v0.0.3
       - --certificatesresolvers.myresolver.acme.dnschallenge=${DNS_CHALLENGE:-true}
       - --certificatesresolvers.myresolver.acme.dnschallenge.provider=${DNS_CHALLENGE_PROVIDER:-cloudflare}
       - --certificatesresolvers.myresolver.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
@@ -37,7 +33,7 @@ services:
       - host.docker.internal:172.17.0.1
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
-      interval: 30s
+      interval: 1m
       retries: 10
   sonarr:
     image: lscr.io/linuxserver/sonarr
@@ -52,7 +48,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8989/sonarr/ping"]
-      interval: 30s
+      interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
@@ -82,7 +78,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:7878/radarr/ping"]
-      interval: 30s
+      interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
@@ -112,7 +108,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8686/lidarr/ping"]
-      interval: 30s
+      interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
@@ -144,7 +140,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:6767/bazarr/ping"]
-      interval: 5s
+      interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
@@ -161,87 +157,37 @@ services:
       - homepage.widget.type=bazarr
       - homepage.widget.url=http://bazarr:6767/bazarr
       - homepage.widget.key=${BAZARR_API_KEY}
-  jellyseerr:
-    image: ghcr.io/fallenbagel/jellyseerr:latest
-    container_name: jellyseerr
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    container_name: seerr
     environment:
       - LOG_LEVEL=debug
       - TZ=${TIMEZONE}
     volumes:
-      - ${CONFIG_ROOT:-.}/jellyseerr:/app/config
+      - ${CONFIG_ROOT:-.}/seerr:/app/config
     restart: always
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "http://127.0.0.1:5055/api/v1/status",
-          "-qO",
-          "/dev/null",
-        ]
-      interval: 30s
+      test: wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/status || exit 1
+      start_period: 20s
+      timeout: 3s
+      interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
-      - traefik.http.routers.jellyseerr.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/jellyseerr`))
-      - traefik.http.routers.jellyseerr.tls=true
-      - traefik.http.routers.jellyseerr.tls.certresolver=myresolver
-      - traefik.http.services.jellyseerr.loadbalancer.server.port=5055
-      - traefik.http.routers.jellyseerr.middlewares=jellyseerr-stripprefix,jellyseerr-rewrite,jellyseerr-rewriteHeaders
-      - traefik.http.middlewares.jellyseerr-stripprefix.stripPrefix.prefixes=/jellyseerr
-      - traefik.http.middlewares.jellyseerr-rewriteHeaders.plugin.rewriteHeaders.rewrites[0].header=location
-      - traefik.http.middlewares.jellyseerr-rewriteHeaders.plugin.rewriteHeaders.rewrites[0].regex=^/(.+)$
-      - traefik.http.middlewares.jellyseerr-rewriteHeaders.plugin.rewriteHeaders.rewrites[0].replacement=/jellyseerr/$1
-      - traefik.http.middlewares.jellyseerr-rewriteHeaders.plugin.rewriteHeaders.rewrites[1].header=location
-      - traefik.http.middlewares.jellyseerr-rewriteHeaders.plugin.rewriteHeaders.rewrites[1].regex=^/$
-      - traefik.http.middlewares.jellyseerr-rewriteHeaders.plugin.rewriteHeaders.rewrites[1].replacement=/jellyseerr
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.monitoring.types[0]=text/html
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.monitoring.types[1]=application/javascript
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.monitoring.types[2]=*/*
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.monitoring.types[3]=application/json
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[1].regex=/_next
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[1].replacement=/jellyseerr/_next
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[2].regex=/_next/data/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[2].replacement=/jellyseerr/_next/data/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[3].regex=/api/v1
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[3].replacement=/jellyseerr/api/v1
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[4].regex=/login/plex/loading
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[4].replacement=/jellyseerr/login/plex/loading
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[5].regex=/images/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[5].replacement=/jellyseerr/images/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[6].regex=/favicon
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[6].replacement=/jellyseerr/favicon
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[7].regex=/logo_
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[7].replacement=/jellyseerr/logo_
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[8].regex=/site.webmanifest
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[8].replacement=/jellyseerr/site.webmanifest
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[9].regex=/sw.js
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[9].replacement=/jellyseerr/sw.js
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[10].regex=/offline.html
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[10].replacement=/jellyseerr/offline.html
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[11].regex=src="/os_logo_square.png"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[11].replacement=src="/jellyseerr/os_logo_square.png"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[12].regex=href([=:])"/([/a-zA-Z?=]*)"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[12].replacement=href$1"/jellyseerr/$2"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[13].regex=linkUrl:"/([/a-zA-Z?=]*)"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[13].replacement=linkUrl:"/jellyseerr/$1"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[14].regex="/([a-z]+)/".concat
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[14].replacement="/jellyseerr/$1/".concat
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[15].regex=url:"/([/a-zA-Z?=]*)"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[15].replacement=url:"/jellyseerr/$1"
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[16].regex=/imageproxy/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[16].replacement=/jellyseerr/imageproxy/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[17].regex=/avatarproxy/
-      - traefik.http.middlewares.jellyseerr-rewrite.plugin.rewrite-body.rewrites[17].replacement=/jellyseerr/avatarproxy/
+      - traefik.http.routers.seerr.rule=(Host(`${SEERR_HOSTNAME}`))
+      - traefik.http.routers.seerr.tls=true
+      - traefik.http.routers.seerr.tls.certresolver=myresolver
+      - traefik.http.services.seerr.loadbalancer.server.port=5055
       - homepage.group=Media
-      - homepage.name=JellySeerr
+      - homepage.name=Seerr
       - homepage.icon=jellyseerr.png
-      - homepage.href=/jellyseerr
+      - homepage.href=https://${SEERR_HOSTNAME}
       - homepage.description=Content Recommendations and Request Management
       - homepage.weight=3
       - homepage.widget.type=jellyseerr
-      - homepage.widget.url=http://jellyseerr:5055
-      - homepage.widget.key=${JELLYSEERR_API_KEY}
+      - homepage.widget.url=http://seerr:5055
+      - homepage.widget.key=${SEERR_API_KEY}
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
@@ -254,7 +200,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:9696/prowlarr/ping"]
-      interval: 30s
+      interval: 1m
       retries: 10
     labels:
       - traefik.enable=true
@@ -271,6 +217,32 @@ services:
       - homepage.widget.type=prowlarr
       - homepage.widget.url=http://prowlarr:9696/prowlarr
       - homepage.widget.key=${PROWLARR_API_KEY}
+  suggestarr:
+    image: ciuse99/suggestarr:latest
+    container_name: suggestarr
+    environment:
+      - SUBPATH=/suggestarr
+    volumes:
+      - ${CONFIG_ROOT:-.}/suggestarr:/app/config/config_files
+    restart: always
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.suggestarr.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/suggestarr`))
+    - traefik.http.routers.suggestarr.tls=true
+    - traefik.http.routers.suggestarr.tls.certresolver=myresolver
+    - traefik.http.services.suggestarr.loadbalancer.server.port=5000
+    - traefik.http.routers.suggestarr.middlewares=suggestarr-strip-slash
+    - traefik.http.middlewares.suggestarr-strip-slash.redirectregex.regex=(^.*\/suggestarr$$)
+    - traefik.http.middlewares.suggestarr-strip-slash.redirectregex.replacement=$$1/
+    - traefik.http.middlewares.suggestarr-strip-slash.redirectregex.permanent=false
+    - homepage.group=Media
+    - homepage.name=Suggestarr
+    - homepage.icon=suggest-arr.png
+    - homepage.href=/suggestarr
+    - homepage.description=Media recommendations
+    - homepage.weight=6
+    profiles:
+      - suggestarr
   flaresolverr:
     image: 21hsmw/flaresolverr:nodriver
     container_name: flaresolverr
@@ -287,6 +259,36 @@ services:
       - traefik.http.services.flaresolverr.loadbalancer.server.port=8191
     profiles:
       - flaresolverr
+  autobrr:
+    container_name: autobrr
+    image: ghcr.io/autobrr/autobrr:latest
+    restart: always
+    environment:
+      - TZ=${TIMEZONE}
+      - AUTOBRR__BASE_URL=/autobrr/
+    user: ${USER_ID}:${GROUP_ID}
+    volumes:
+      - ${CONFIG_ROOT:-.}/autobrr:/config
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.autobrr-strip.stripprefix.prefixes=/autobrr
+      - traefik.http.middlewares.autobrr-strip.stripprefix.forceSlash=true
+      - traefik.http.routers.autobrr.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/autobrr`))
+      - traefik.http.routers.autobrr.tls=true
+      - traefik.http.routers.autobrr.tls.certresolver=myresolver
+      - traefik.http.services.autobrr.loadbalancer.server.port=7474
+      - traefik.http.routers.autobrr.middlewares=autobrr-strip
+      - homepage.group=Download
+      - homepage.name=Autobrr
+      - homepage.icon=autobrr.png
+      - homepage.href=/autobrr
+      - homepage.description=Torrent download automation
+      - homepage.weight=7
+      - homepage.widget.type=autobrr
+      - homepage.widget.url=http://autobrr:7474
+      - homepage.widget.key=${AUTOBRR_API_KEY}
+    profiles:
+      - autobrr
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:libtorrentv1
     container_name: qbittorrent
@@ -305,7 +307,7 @@ services:
       # see: https://github.com/qdm12/gluetun/issues/641#issuecomment-933856220
       test:
         ["CMD", "curl", "--fail", "http://127.0.0.1:8080", "https://google.com"]
-      interval: 30s
+      interval: 1m
       retries: 10
     network_mode: "service:vpn"
     depends_on:
@@ -317,14 +319,16 @@ services:
       - traefik.http.routers.qbittorrent.tls=true
       - traefik.http.routers.qbittorrent.tls.certresolver=myresolver
       - traefik.http.services.qbittorrent.loadbalancer.server.port=8080
-      - traefik.http.routers.qbittorrent.middlewares=qbittorrent-strip-slash,qbittorrent-stripprefix
+      - traefik.http.routers.qbittorrent.middlewares=qbittorrent-strip-slash,qbittorrent-stripprefix,qbittorrent-drop-encoding
       # https://github.com/qbittorrent/qBittorrent/issues/5693#issuecomment-552146296
       - traefik.http.middlewares.qbittorrent-stripprefix.stripPrefix.prefixes=/qbittorrent
       # https://community.traefik.io/t/middleware-to-add-the-if-needed/1895/19
       - traefik.http.middlewares.qbittorrent-strip-slash.redirectregex.regex=(^.*\/qbittorrent$$)
       - traefik.http.middlewares.qbittorrent-strip-slash.redirectregex.replacement=$$1/
       - traefik.http.middlewares.qbittorrent-strip-slash.redirectregex.permanent=false
-      #- com.centurylinklabs.watchtower.depends-on=/vpn
+      # https://github.com/VueTorrent/VueTorrent/issues/2718#issuecomment-4189837679
+      - traefik.http.middlewares.qbittorrent-drop-encoding.headers.customrequestheaders.Accept-Encoding=
+      - com.centurylinklabs.watchtower.depends-on=vpn
       - homepage.group=Download
       - homepage.name=qBittorrent
       - homepage.icon=qbittorrent.png
@@ -355,17 +359,25 @@ services:
       - PORT_PERSIST=1
       - PORT_SCRIPT=/pia-shared/portupdate-qbittorrent.sh
       - FIREWALL=0
+      - ACTIVE_HEALTHCHECKS=1
+      - RECONNECT=1
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
       - net.ipv6.conf.default.disable_ipv6=1
       - net.ipv6.conf.all.disable_ipv6=1
       - net.ipv6.conf.lo.disable_ipv6=1
-    healthcheck:
-      test: ping -c 1 www.google.com || exit 1
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: always
+  cross-seed:
+    image: ghcr.io/cross-seed/cross-seed:latest
+    container_name: cross-seed
+    user: ${USER_ID}:${GROUP_ID}
+    volumes:
+      - ${CONFIG_ROOT:-.}/cross-seed:/config
+      - ${DOWNLOAD_ROOT}:/data/torrents
+    command: daemon
+    restart: always
+    profiles:
+      - cross-seed
   unpackerr:
     image: ghcr.io/unpackerr/unpackerr:latest
     container_name: unpackerr
@@ -381,6 +393,45 @@ services:
       - UN_RADARR_0_API_KEY=${RADARR_API_KEY}
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+  cleanuparr:
+    image: ghcr.io/cleanuparr/cleanuparr:latest
+    container_name: cleanuparr
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11011/cleanuparr/health"]
+      interval: 1m
+      timeout: 10s
+      start_period: 30s
+      retries: 10
+    volumes:
+      - ${CONFIG_ROOT:-.}/cleanuparr/logs:/var/logs
+      - ${CONFIG_ROOT:-.}/cleanuparr/ignored.txt:/usr/ignored.txt
+      - ${CONFIG_ROOT:-.}/cleanuparr/blacklist.json:/usr/blacklist.json
+      - ${CONFIG_ROOT:-.}/cleanuparr:/config
+    environment:
+      - TZ=${TIMEZONE}
+      - PUID=${USER_ID}
+      - PGID=${GROUP_ID}
+      - BASE_PATH=/cleanuparr
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.cleanuparr.rule=(Host(`${HOSTNAME}`) && PathPrefix(`/cleanuparr`))
+      - traefik.http.routers.cleanuparr.tls=true
+      - traefik.http.routers.cleanuparr.tls.certresolver=myresolver
+      - traefik.http.services.cleanuparr.loadbalancer.server.port=11011
+      - homepage.group=Download
+      - homepage.name=Cleanuparr
+      - homepage.icon=cleanuperr.png
+      - homepage.href=/cleanuparr
+      - homepage.description=Cleanuparr
+      - homepage.weight=5
+    profiles:
+      - cleanuparr
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd:latest
     container_name: sabnzbd
@@ -477,42 +528,6 @@ services:
       - homepage.widget.password=${CALIBRE_PASSWORD}
     profiles:
       - calibre-web
-  decluttarr:
-    image: ghcr.io/manimatter/decluttarr:latest
-    container_name: decluttarr
-    restart: always
-    environment:
-      - PUID=${USER_ID}
-      - PGID=${GROUP_ID}
-      - TZ=${TIMEZONE}
-      - RADARR_URL=http://radarr:7878/radarr
-      - RADARR_KEY=${RADARR_API_KEY}
-      - SONARR_URL=http://sonarr:8989/sonarr
-      - SONARR_KEY=${SONARR_API_KEY}
-      - LIDARR_URL=http://lidarr:8686/lidarr
-      - LIDARR_KEY=${LIDARR_API_KEY}
-      - QBITTORRENT_URL=http://qbittorrent:8080
-      - QBITTORRENT_USERNAME=${QBITTORRENT_USERNAME}
-      - QBITTORRENT_PASSWORD=${QBITTORRENT_PASSWORD}
-      - LOG_LEVEL=${DECLUTTARR_LOG_LEVEL:-INFO}
-      - TEST_RUN=${DECLUTTARR_TEST_RUN:-False}
-      - REMOVE_TIMER=${DECLUTTARR_REMOVE_TIMER:-10}
-      - REMOVE_FAILED=${DECLUTTARR_REMOVE_FAILED:-True}
-      - REMOVE_FAILED_IMPORTS=${DECLUTTARR_REMOVE_FAILED_IMPORTS:-True}
-      - REMOVE_METADATA_MISSING=${DECLUTTARR_REMOVE_METADATA_MISSING:-True}
-      - REMOVE_MISSING_FILES=${DECLUTTARR_REMOVE_MISSING_FILES:-True}
-      - REMOVE_ORPHANS=${DECLUTTARR_REMOVE_ORPHANS:-True}
-      - REMOVE_SLOW=${DECLUTTARR_REMOVE_SLOW:-True}
-      - REMOVE_STALLED=${DECLUTTARR_REMOVE_STALLED:-True}
-      - REMOVE_UNMONITORED=${DECLUTTARR_REMOVE_UNMONITORED:-True}
-      - RUN_PERIODIC_RESCANS=${DECLUTTARR_RUN_PERIODIC_RESCANS:-}
-      - PERMITTED_ATTEMPTS=${DECLUTTARR_PERMITTED_ATTEMPTS:-3}
-      - NO_STALLED_REMOVAL_QBIT_TAG=${DECLUTTARR_REMOVAL_QBIT_TAG:-"stalled"}
-      - MIN_DOWNLOAD_SPEED=${DECLUTTARR_MIN_DOWNLOAD_SPEED:-100}
-      - FAILED_IMPORT_MESSAGE_PATTERNS=${DECLUTTARR_FAILED_IMPORT_MESSAGE_PATTERNS:-}
-      - IGNORED_DOWNLOAD_CLIENTS=${DECLUTTARR_IGNORED_DOWNLOAD_CLIENTS:-}
-    profiles:
-      - decluttarr
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
@@ -540,11 +555,13 @@ services:
       - traefik.http.routers.homepage.tls.certresolver=myresolver
       - traefik.http.services.homepage.loadbalancer.server.port=3000
   watchtower:
-    image: ghcr.io/containrrr/watchtower:latest
+    image: ghcr.io/nicholas-fedor/watchtower:latest
     container_name: watchtower
     restart: always
     environment:
       - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_DEBUG=true
+      - WATCHTOWER_INCLUDE_STOPPED=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
   autoheal:

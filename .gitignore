@@ -10,11 +10,12 @@ docker-compose.override.yml
 /prowlarr
 /lidarr
 /bazarr
+/huntarr
 /qbittorrent
 /pia
 /pia-shared
 /letsencrypt
-/jellyseerr
+/seerr
 /adguardhome/certs
 /adguardhome/conf
 /adguardhome/work
@@ -29,7 +30,6 @@ docker-compose.override.yml
 /cross-seed/
 /data/
 /frigate/
-/huntarr/
 /matter-data/
 /mqtt-config/
 /mqtt-data/

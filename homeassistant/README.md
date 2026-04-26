@@ -18,6 +18,7 @@ http:
   trusted_proxies:
     - 172.0.0.0/8 # You can put a more precise range instead
 ```
+
 Set the `HOMEASSISTANT_ACCESS_TOKEN` for homepage support.
 
 ## MQTT

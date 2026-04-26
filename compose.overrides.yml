@@ -103,24 +103,24 @@ services:
       homepage.href: "https://jellyfin.${BASE_HOSTNAME}"
       homepage.widget.url: "http://jellyfin:8096"
 
-  # ─── Jellyseerr ───────────────────────────────────────────────────────────
+  # ─── Seerr ────────────────────────────────────────────────────────────────
   # Changes vs upstream:
-  #   - Dedicated subdomain (JELLYSEERR_HOSTNAME) instead of path-prefix /jellyseerr
+  #   - Dedicated subdomain (SEERR_HOSTNAME) instead of path-prefix routing
   #   - All rewrite-body/rewriteHeaders middleware dropped (subdomain needs none)
-  jellyseerr:
+  seerr:
     healthcheck:
       interval: 1m
     labels:
       # Subdomain routing
-      traefik.http.routers.jellyseerr.rule: "Host(`${JELLYSEERR_HOSTNAME}`)"
-      traefik.http.routers.jellyseerr.tls: "true"
-      traefik.http.routers.jellyseerr.tls.certresolver: "myresolver"
-      traefik.http.services.jellyseerr.loadbalancer.server.port: "5055"
+      traefik.http.routers.seerr.rule: "Host(`${SEERR_HOSTNAME}`)"
+      traefik.http.routers.seerr.tls: "true"
+      traefik.http.routers.seerr.tls.certresolver: "myresolver"
+      traefik.http.services.seerr.loadbalancer.server.port: "5055"
       # Disable all middleware from upstream's path-prefix setup
-      traefik.http.routers.jellyseerr.middlewares: ""
+      traefik.http.routers.seerr.middlewares: ""
       # Homepage
-      homepage.href: "https://${JELLYSEERR_HOSTNAME}"
-      homepage.widget.url: "http://jellyseerr:5055"
+      homepage.href: "https://${SEERR_HOSTNAME}"
+      homepage.widget.url: "http://seerr:5055"
 
   # ─── Calibre-Web ──────────────────────────────────────────────────────────
   # Changes vs upstream:

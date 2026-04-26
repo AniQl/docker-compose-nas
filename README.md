@@ -24,10 +24,11 @@ I am running it in Ubuntu Server 22.04; I also tested this setup on a [Synology 
     - [File Structure](#file-structure)
     - [Download Client](#download-client)
   - [Prowlarr](#prowlarr)
+  - [Cross-Seed](#cross-seed)
   - [qBittorrent](#qbittorrent)
   - [Jellyfin](#jellyfin)
   - [Homepage](#homepage)
-  - [Jellyseerr](#jellyseerr)
+  - [Seerr](#seerr)
   - [Traefik and SSL Certificates](#traefik-and-ssl-certificates)
     - [Accessing from the outside with Tailscale](#accessing-from-the-outside-with-tailscale)
   - [Optional Services](#optional-services)
@@ -44,6 +45,7 @@ I am running it in Ubuntu Server 22.04; I also tested this setup on a [Synology 
     - [Home Assistant](#home-assistant)
     - [Immich](#immich)
     - [Vaultwarden](#vaultwarden)
+    - [Paperless Ngx](#paperless-ngx)
   - [Customization](#customization)
     - [Optional: Using the VPN for \*arr apps](#optional-using-the-vpn-for-arr-apps)
   - [Synology Quirks](#synology-quirks)
@@ -60,33 +62,36 @@ I am running it in Ubuntu Server 22.04; I also tested this setup on a [Synology 
 
 ## Applications
 
-| **Application**                                                    | **Description**                                                                                                                                      | **Image**                                                                                | **URL**                |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------- |
-| [Sonarr](https://sonarr.tv)                                        | PVR for newsgroup and bittorrent users                                                                                                               | [linuxserver/sonarr](https://hub.docker.com/r/linuxserver/sonarr)                        | /sonarr                |
-| [Radarr](https://radarr.video)                                     | Movie collection manager for Usenet and BitTorrent users                                                                                             | [linuxserver/radarr](https://hub.docker.com/r/linuxserver/radarr)                        | /radarr                |
-| [Bazarr](https://www.bazarr.media/)                                | Companion application to Sonarr and Radarr that manages and downloads subtitles                                                                      | [linuxserver/bazarr](https://hub.docker.com/r/linuxserver/bazarr)                        | /bazarr                |
-| [Prowlarr](https://github.com/Prowlarr/Prowlarr)                   | Indexer aggregator for Sonarr and Radarr                                                                                                             | [linuxserver/prowlarr:latest](https://hub.docker.com/r/linuxserver/prowlarr)             | /prowlarr              |
-| [PIA WireGuard VPN](https://github.com/thrnz/docker-wireguard-pia) | Encapsulate qBittorrent traffic in [PIA](https://www.privateinternetaccess.com/) using [WireGuard](https://www.wireguard.com/) with port forwarding. | [thrnz/docker-wireguard-pia](https://hub.docker.com/r/thrnz/docker-wireguard-pia)        |                        |
-| [qBittorrent](https://www.qbittorrent.org)                         | Bittorrent client with a complete web UI<br/>Uses VPN network<br/>Using Libtorrent 1.x                                                               | [linuxserver/qbittorrent:libtorrentv1](https://hub.docker.com/r/linuxserver/qbittorrent) | /qbittorrent           |
-| [Unpackerr](https://unpackerr.zip)                                 | Automated Archive Extractions                                                                                                                        | [golift/unpackerr](https://hub.docker.com/r/golift/unpackerr)                            |                        |
-| [Cleanuparr](https://github.com/Cleanuparr/Cleanuparr)             | Cleanuparr is a tool for automating the cleanup of unwanted or blocked files in Sonarr and Radarr.                                                   | [cleanuparr/cleanuparr](https://ghcr.io/cleanuparr/cleanuparr)                           |                        |
-| [Jellyfin](https://jellyfin.org)                                   | Media server designed to organize, manage, and share digital media files to networked devices                                                        | [linuxserver/jellyfin](https://hub.docker.com/r/linuxserver/jellyfin)                    | /jellyfin              |
-| [Jellyseer](https://jellyfin.org)                                  | Manages requests for your media library                                                                                                              | [fallenbagel/jellyseerr](https://hub.docker.com/r/fallenbagel/jellyseerr)                | `$JELLYSEERR_HOSTNAME` |
-| [Homepage](https://gethomepage.dev)                                | Application dashboard                                                                                                                                | [gethomepage/homepage](https://github.com/gethomepage/homepage/pkgs/container/homepage)  | /                      |
-| [Traefik](https://traefik.io)                                      | Reverse proxy                                                                                                                                        | [traefik](https://hub.docker.com/_/traefik)                                              |                        |
-| [Watchtower](https://containrrr.dev/watchtower/)                   | Automated Docker images update                                                                                                                       | [containrrr/watchtower](https://hub.docker.com/r/containrrr/watchtower)                  |                        |
-| [Autoheal](https://github.com/willfarrell/docker-autoheal/)        | Monitor and restart unhealthy Docker containers                                                                                                      | [willfarrell/autoheal](https://hub.docker.com/r/willfarrell/autoheal)                    |                        |
-| [Lidarr](https://lidarr.audio)                                     | Optional - Music collection manager for Usenet and BitTorrent users<br/>Enable with `COMPOSE_PROFILES=lidarr`                                        | [linuxserver/lidarr](https://hub.docker.com/r/linuxserver/lidarr)                        | /lidarr                |
-| [SABnzbd](https://sabnzbd.org/)                                    | Optional - Free and easy binary newsreader<br/>Enable with `COMPOSE_PROFILES=sabnzbd`                                                                | [linuxserver/sabnzbd](https://hub.docker.com/r/linuxserver/sabnzbd)                      | /sabnzbd               |
-| [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)       | Optional - Proxy server to bypass Cloudflare protection in Prowlarr<br/>Enable with `COMPOSE_PROFILES=flaresolverr`                                  | [flaresolverr/flaresolverr](https://hub.docker.com/r/flaresolverr/flaresolverr)          |                        |
-| [AdGuard Home](https://adguard.com/en/adguard-home/overview.html)  | Optional - Network-wide software for blocking ads & tracking<br/>Enable with `COMPOSE_PROFILES=adguardhome`                                          | [adguard/adguardhome](https://hub.docker.com/r/adguard/adguardhome)                      |                        |
-| [Tandoor](https://tandoor.dev)                                     | Optional - Smart recipe management<br/>Enable with `COMPOSE_PROFILES=tandoor`                                                                        | [vabene1111/recipes](https://hub.docker.com/r/vabene1111/recipes)                        | /recipes               |
-| [Joplin](https://joplinapp.org)                                    | Optional - Note taking application<br/>Enable with `COMPOSE_PROFILES=joplin`                                                                         | [joplin/server](https://hub.docker.com/r/joplin/server)                                  | /joplin                |
-| [Home Assistant](https://www.home-assistant.io)                    | Optional - Open source home automation that puts local control and privacy first<br/>Enable with `COMPOSE_PROFILES=homeassistant`                    | [home-assistant/home-assistant:stable](https://ghcr.io/home-assistant/home-assistant)    |                        |
-| [Immich](https://immich.app)                                       | Optional - Self-hosted photo and video management solution<br/>Enable with `COMPOSE_PROFILES=immich`                                                 | [immich-app/immich-server:release](https://ghcr.io/immich-app/immich-server)             |                        |
-| [Calibre-Web](https://github.com/janeczku/calibre-web)             | Optional - Web app for browsing, reading and downloading eBooks stored in a Calibre database<br/>Enable with `COMPOSE_PROFILES=calibre-web`          | [linuxserver/calibre-web](https://hub.docker.com/r/linuxserver/calibre-web)              | /calibre               |
-| [Decluttarr](https://github.com/ManiMatter/decluttarr)             | Optional - Keeps the download queues free of stalled and redundant downloads. <br/>Enable with `COMPOSE_PROFILES=decluttarr`                         | [manimatter/decluttarr:latest](https://ghcr.io/manimatter/decluttarr:latest)             |                        |
-| [Vaultwarden](https://github.com/dani-garcia/vaultwarden)          | Optional - Password manager<br/>Enable with `COMPOSE_PROFILES=vaultwarden`                                                                           | [dani-garcia/vaultwarden](https://ghcr.io/dani-garcia/vaultwarden)                       | /vaultwarden           |
+| **Application**                                                    | **Description**                                                                                                                                               | **Image**                                                                                | **URL**                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------- |
+| [Sonarr](https://sonarr.tv)                                        | PVR for newsgroup and bittorrent users                                                                                                                        | [linuxserver/sonarr](https://hub.docker.com/r/linuxserver/sonarr)                        | /sonarr                |
+| [Radarr](https://radarr.video)                                     | Movie collection manager for Usenet and BitTorrent users                                                                                                      | [linuxserver/radarr](https://hub.docker.com/r/linuxserver/radarr)                        | /radarr                |
+| [Bazarr](https://www.bazarr.media/)                                | Companion application to Sonarr and Radarr that manages and downloads subtitles                                                                               | [linuxserver/bazarr](https://hub.docker.com/r/linuxserver/bazarr)                        | /bazarr                |
+| [Prowlarr](https://github.com/Prowlarr/Prowlarr)                   | Indexer aggregator for Sonarr and Radarr                                                                                                                      | [linuxserver/prowlarr:latest](https://hub.docker.com/r/linuxserver/prowlarr)             | /prowlarr              |
+| [PIA WireGuard VPN](https://github.com/thrnz/docker-wireguard-pia) | Encapsulate qBittorrent traffic in [PIA](https://www.privateinternetaccess.com/) using [WireGuard](https://www.wireguard.com/) with port forwarding.          | [thrnz/docker-wireguard-pia](https://hub.docker.com/r/thrnz/docker-wireguard-pia)        |                        |
+| [qBittorrent](https://www.qbittorrent.org)                         | Bittorrent client with a complete web UI<br/>Uses VPN network<br/>Using Libtorrent 1.x                                                                        | [linuxserver/qbittorrent:libtorrentv1](https://hub.docker.com/r/linuxserver/qbittorrent) | /qbittorrent           |
+| [Unpackerr](https://unpackerr.zip)                                 | Automated Archive Extractions                                                                                                                                 | [golift/unpackerr](https://hub.docker.com/r/golift/unpackerr)                            |                        |
+| [Jellyfin](https://jellyfin.org)                                   | Media server designed to organize, manage, and share digital media files to networked devices                                                                 | [linuxserver/jellyfin](https://hub.docker.com/r/linuxserver/jellyfin)                    | /jellyfin              |
+| [Jellyseer](https://seerr.dev/)                                    | Manages requests for your media library                                                                                                                       | [docker pull ghcr.io/seerr-team/seerr:sha-04b9d87](https://github.com/seerr-team/seerr/pkgs/container/seerr)                | `$SEERR_HOSTNAME` |
+| [Homepage](https://gethomepage.dev)                                | Application dashboard                                                                                                                                         | [gethomepage/homepage](https://github.com/gethomepage/homepage/pkgs/container/homepage)  | /                      |
+| [Traefik](https://traefik.io)                                      | Reverse proxy                                                                                                                                                 | [traefik](https://hub.docker.com/_/traefik)                                              |                        |
+| [Watchtower](https://watchtower.nickfedor.com)                     | Automated Docker images update                                                                                                                                | [nicholas-fedor/watchtower](https://ghcr.io/nicholas-fedor/watchtower)                   |                        |
+| [Autoheal](https://github.com/willfarrell/docker-autoheal/)        | Monitor and restart unhealthy Docker containers                                                                                                               | [willfarrell/autoheal](https://hub.docker.com/r/willfarrell/autoheal)                    |                        |
+| [Lidarr](https://lidarr.audio)                                     | Optional - Music collection manager for Usenet and BitTorrent users<br/>Enable with `COMPOSE_PROFILES=lidarr`                                                 | [linuxserver/lidarr](https://hub.docker.com/r/linuxserver/lidarr)                        | /lidarr                |
+| [SABnzbd](https://sabnzbd.org/)                                    | Optional - Free and easy binary newsreader<br/>Enable with `COMPOSE_PROFILES=sabnzbd`                                                                         | [linuxserver/sabnzbd](https://hub.docker.com/r/linuxserver/sabnzbd)                      | /sabnzbd               |
+| [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)       | Optional - Proxy server to bypass Cloudflare protection in Prowlarr<br/>Enable with `COMPOSE_PROFILES=flaresolverr`                                           | [flaresolverr/flaresolverr](https://hub.docker.com/r/flaresolverr/flaresolverr)          |                        |
+| [AdGuard Home](https://adguard.com/en/adguard-home/overview.html)  | Optional - Network-wide software for blocking ads & tracking<br/>Enable with `COMPOSE_PROFILES=adguardhome`                                                   | [adguard/adguardhome](https://hub.docker.com/r/adguard/adguardhome)                      |                        |
+| [Tandoor](https://tandoor.dev)                                     | Optional - Smart recipe management<br/>Enable with `COMPOSE_PROFILES=tandoor`                                                                                 | [vabene1111/recipes](https://hub.docker.com/r/vabene1111/recipes)                        | /recipes               |
+| [Joplin](https://joplinapp.org)                                    | Optional - Note taking application<br/>Enable with `COMPOSE_PROFILES=joplin`                                                                                  | [joplin/server](https://hub.docker.com/r/joplin/server)                                  | /joplin                |
+| [Home Assistant](https://www.home-assistant.io)                    | Optional - Open source home automation that puts local control and privacy first<br/>Enable with `COMPOSE_PROFILES=homeassistant`                             | [home-assistant/home-assistant:stable](https://ghcr.io/home-assistant/home-assistant)    |                        |
+| [Immich](https://immich.app)                                       | Optional - Self-hosted photo and video management solution<br/>Enable with `COMPOSE_PROFILES=immich`                                                          | [immich-app/immich-server:release](https://ghcr.io/immich-app/immich-server)             |                        |
+| [Calibre-Web](https://github.com/janeczku/calibre-web)             | Optional - Web app for browsing, reading and downloading eBooks stored in a Calibre database<br/>Enable with `COMPOSE_PROFILES=calibre-web`                   | [linuxserver/calibre-web](https://hub.docker.com/r/linuxserver/calibre-web)              | /calibre               |
+| [Vaultwarden](https://github.com/dani-garcia/vaultwarden)          | Optional - Password manager<br/>Enable with `COMPOSE_PROFILES=vaultwarden`                                                                                    | [dani-garcia/vaultwarden](https://ghcr.io/dani-garcia/vaultwarden)                       | /vaultwarden           |
+| [Cleanuparr](https://github.com/Cleanuparr/Cleanuparr)             | Optional - Cleanuparr is a tool for automating the cleanup of unwanted or blocked files in Sonarr and Radarr<br/>Enable with `COMPOSE_PROFILES=cleanuparr`    | [cleanuparr/cleanuparr](https://ghcr.io/cleanuparr/cleanuparr)                           | /cleanuparr            |
+| [Cross-Seed](https://github.com/cross-seed/cross-seed)             | Optional - Cross-Seed is a tool for automating the cross-seeding of torrents<br/>Enable with `COMPOSE_PROFILES=cross-seed`                                    | [cross-seed/cross-seed](https://ghcr.io/cross-seed/cross-seed)                           |                        |
+| [Autobrr](https://github.com/autobrr/autobrr)                      | Optional - Autobrr is a tool for automating the downloading of torrents<br/>Enable with `COMPOSE_PROFILES=autobrr`                                            | [autobrr/autobrr](https://ghcr.io/autobrr/autobrr)                                       | /autobrr               |
+| [Suggestarr](github.com/giuseppe99barchetta/SuggestArr)                      | Optional - SuggestArr is a project designed to automate media content recommendations and download requests<br/>Enable with `COMPOSE_PROFILES=suggestarr`                                            | [ciuse99/suggestarr](https://hub.docker.com/r/ciuse99/suggestarr)                                       | /suggestarr               |
+| [Paperless Ngx](https://paperless-ngx.com)                            | Optional - Document management system for organizing and searching your documents<br/>Enable with `COMPOSE_PROFILES=paperless`                                                     | [paperless-ngx/paperless-ngx](https://ghcr.io/paperless-ngx/paperless-ngx)                           | /paperless               |
 
 Optional containers are not enabled by default, they need to be enabled,
 see [Optional Services](#optional-services) for more information.
@@ -135,8 +140,9 @@ If you want to show Jellyfin information in the homepage, create it in Jellyfin 
 | `PROWLARR_API_KEY`             | Prowlarr API key to show information in the homepage                                                                                                                                                   |                                                  |
 | `BAZARR_API_KEY`               | Bazarr API key to show information in the homepage                                                                                                                                                     |                                                  |
 | `JELLYFIN_API_KEY`             | Jellyfin API key to show information in the homepage                                                                                                                                                   |                                                  |
-| `JELLYSEERR_API_KEY`           | Jellyseer API key to show information in the homepage                                                                                                                                                  |                                                  |
+| `SEERR_API_KEY`                | Seer API key to show information in the homepage                                                                                                                                                  |                                                  |
 | `SABNZBD_API_KEY`              | Sabnzbd API key to show information in the homepage                                                                                                                                                    |                                                  |
+| `AUTOBRR_API_KEY`              | Autobrr API key to show information in the homepage                                                                                                                                                    |                                                  |
 | `HOMEPAGE_VAR_TITLE`           | Title of the homepage                                                                                                                                                                                  | `Docker-Compose NAS`                             |
 | `HOMEPAGE_VAR_SEARCH_PROVIDER` | Homepage search provider, [see list here](https://gethomepage.dev/en/widgets/search/)                                                                                                                  | `google`                                         |
 | `HOMEPAGE_VAR_HEADER_STYLE`    | Homepage header style, [see list here](https://gethomepage.dev/en/configs/settings/#header-style)                                                                                                      | `boxed`                                          |
@@ -146,7 +152,7 @@ If you want to show Jellyfin information in the homepage, create it in Jellyfin 
 | `HOMEPAGE_VAR_WEATHER_UNIT`    | Homepage weather unit, either `metric` or `imperial`                                                                                                                                                   | `metric`                                         |
 | `CALIBRE_USERNAME`             | Optional - Calibre-Web username to show details in the homepage, if enabled                                                                                                                            | `admin`                                          |
 | `CALIBRE_PASSWORD`             | Optional - Calibre-Web password to show details in the homepage, if enabled                                                                                                                            | `admin123`                                       |
-| `JELLYSEERR_HOSTNAME`          | Jellyseerr hostname used                                                                                                                                                                               |                                                  |
+| `SEERR_HOSTNAME`          | Seerr hostname used                                                                                                                                                                               |                                                  |
 
 ## PIA WireGuard VPN
 
@@ -255,15 +261,15 @@ Due to how the Docker socket is configured for the Docker integration, files mus
 
 The files in `/homepage/tpl/*.yaml` only serve as a base to set up the homepage configuration on first run.
 
-## Jellyseerr
+## Seerr
 
 Jellyseer gives you content recommendations, allows others to make requests to you, and allows logging in with Jellyfin credentials.
 
-Set the `JELLYSEERR_HOSTNAME`, since it does not support
-[running in a subfolder](https://github.com/Fallenbagel/jellyseerr/issues/97).
+Set the `SEERR_HOSTNAME`, since it does not support
+[running in a subfolder](https://github.com/seerr-team/seerr/pull/1411).
 Add the necessary DNS records in your domain.
 
-To set up, go to the Jellyseerr hostname, and set the URLs as follows:
+To set up, go to the Seerr hostname, and set the URLs as follows:
 
 - Jellyfin: http://jellyfin:8096/jellyfin
 - Radarr:
@@ -348,6 +354,29 @@ Multiple optional services can be enabled separated by commas: `COMPOSE_PROFILES
 ### FlareSolverr
 
 In Prowlarr, add the FlareSolverr indexer with the URL http://flaresolverr:8191/
+
+### Cross-Seed
+
+Enable Cross-Seed by setting `COMPOSE_PROFILES=cross-seed`.
+
+Generate the configuration file with `docker compose run -v ./cross-seed:/config cross-seed gen-config`.
+
+Modify the configuration file as follows:
+
+```js
+module.exports = {
+  ...
+  torznab: [
+    "http://prowlarr:9696/prowlarr/1/api?apikey=<api_key>",
+    ...
+  ],
+  sonarr: ["http://sonarr:8989/sonarr?apikey=<api_key>"],
+  radarr: ["http://radarr:7878/radarr?apikey=<api_key>"],
+  torrentClients: ["qbittorrent:http://admin:adminadmin@vpn:8080"],
+  linkDirs: ["/data/torrents"],
+  ...
+}
+```
 
 ### SABnzbd
 
@@ -438,6 +467,10 @@ See [here](./immich/README.md).
 ### Vaultwarden
 
 See [here](./vaultwarden/README.md).
+
+### Paperless Ngx
+
+See [here](./paperless/README.md).
 
 ## Customization
 
@@ -553,7 +586,14 @@ services:
 
 Note you will lose the hard link ability, ie your files will be duplicated.
 
-In Sonarr and Radarr, go to `Settings` > `Importing` > Untick `Use Hardlinks instead of Copy`
+In Sonarr and Radarr, go to `Settings` > `Importing` > Untick `Use Hardlinks instead of Copy`.  
+To [setup permissions](https://trash-guides.info/File-and-Folder-Structure/How-to-set-up/Docker/#permissions) for the `DATA_ROOT` folder:
+
+```
+source .env
+sudo chown -R $USER:$USER $DATA_ROOT
+sudo chmod -R a=,a+rX,u+w,g+w $DATA_ROOT
+```
 
 ## NFS Share
 
