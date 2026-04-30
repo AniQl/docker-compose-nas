@@ -133,6 +133,7 @@ services:
       INIT_USERNAME: "admin"
       INIT_PASSWORD: "${WGEASY_UI_PASSWORD}"
       ENABLE_PROMETHEUS_METRICS: "true"
+      DISABLE_IPV6: "true"
     labels:
       traefik.enable: "true"
       traefik.http.routers.wgeasy.rule: "Host(`wg-ui.${BASE_HOSTNAME}`)"
