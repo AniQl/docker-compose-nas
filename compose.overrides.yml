@@ -101,7 +101,7 @@ services:
       traefik.http.routers.jellyfin.middlewares: ""
       # Homepage
       homepage.href: "https://jellyfin.${BASE_HOSTNAME}"
-      homepage.widget.url: "http://jellyfin:8096"
+      homepage.widget.url: "http://jellyfin:8096/jellyfin"
 
   # ─── Seerr ────────────────────────────────────────────────────────────────
   # Changes vs upstream:
