@@ -1,0 +1,530 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Homelab System Alerts
+    folder: Homelab Alerts
+    interval: 1m
+    rules:
+
+      # ── CPU ────────────────────────────────────────────────────────────────
+      - uid: homelab-cpu-high
+        title: High CPU Usage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: "100 - avg(netdata_system_cpu_percentage_average{dimension=\"idle\"})"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "CPU usage above 85% on {{ $labels.instance }}"
+          description: "CPU usage has been above 85% for more than 5 minutes. Current value: {{ $values.B }}%"
+        labels:
+          severity: warning
+        isPaused: false
+
+      # ── RAM ────────────────────────────────────────────────────────────────
+      - uid: homelab-ram-low
+        title: Low Available RAM
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: "netdata_mem_available_MiB_average{dimension=\"avail\"}"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [3200]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Available RAM below 3200 MiB"
+          description: "Available RAM has been below 3.2 GB for more than 5 minutes. Current: {{ $values.B }} MiB"
+        labels:
+          severity: warning
+        isPaused: false
+
+      # ── Root disk ──────────────────────────────────────────────────────────
+      - uid: homelab-root-disk-full
+        title: Root Disk Nearly Full
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: |
+                (
+                  netdata_disk_space_GiB_average{dimension="used", mount_point="/"}
+                  /
+                  (
+                    netdata_disk_space_GiB_average{dimension="used", mount_point="/"}
+                    + netdata_disk_space_GiB_average{dimension="avail", mount_point="/"}
+                    + netdata_disk_space_GiB_average{dimension="reserved for root", mount_point="/"}
+                  )
+                ) * 100
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Root disk usage above 85%"
+          description: "Root filesystem (/) is {{ $values.B }}% full"
+        labels:
+          severity: critical
+        isPaused: false
+
+      # ── NAS disk ───────────────────────────────────────────────────────────
+      - uid: homelab-nas-disk-full
+        title: NAS Disk Nearly Full
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: |
+                (
+                  netdata_disk_space_GiB_average{dimension="used", mount_point="/mnt/nas1"}
+                  /
+                  (
+                    netdata_disk_space_GiB_average{dimension="used", mount_point="/mnt/nas1"}
+                    + netdata_disk_space_GiB_average{dimension="avail", mount_point="/mnt/nas1"}
+                    + netdata_disk_space_GiB_average{dimension="reserved for root", mount_point="/mnt/nas1"}
+                  )
+                ) * 100
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "NAS disk (/mnt/nas1) usage above 85%"
+          description: "NAS storage at /mnt/nas1 is {{ $values.B }}% full"
+        labels:
+          severity: critical
+        isPaused: false
+
+      # ── Disk I/O pressure ──────────────────────────────────────────────────
+      - uid: homelab-disk-io-pressure
+        title: High Disk I/O Pressure
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: "netdata_system_io_full_pressure_percentage_average{dimension=\"full 60\"}"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [50]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Disk I/O pressure above 50%"
+          description: "Disk I/O full pressure (60s avg) is at {{ $values.B }}% — system is spending significant time waiting on I/O"
+        labels:
+          severity: warning
+        isPaused: false
+
+      # ── Network spike ──────────────────────────────────────────────────────
+      - uid: homelab-network-spike
+        title: Network Traffic Spike
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: "abs(netdata_system_net_kilobits_persec_average)"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: max
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [800000]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Network traffic above 100 MB/s"
+          description: "Network throughput is {{ $values.B }} Kbits/s — unusually high for a homelab"
+        labels:
+          severity: warning
+        isPaused: false
+
+      # ── System load ────────────────────────────────────────────────────────
+      - uid: homelab-load-high
+        title: High System Load
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: "netdata_system_load_load_average{dimension=\"load5\"}"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [12]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "System load average (5m) above 12"
+          description: "5-minute load average is {{ $values.B }} — exceeds the number of CPU cores (12)"
+        labels:
+          severity: warning
+        isPaused: false
+
+      # ── Container unhealthy ────────────────────────────────────────────────
+      - uid: homelab-container-unhealthy
+        title: Container Unhealthy
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: PBFA97CFB590B2093
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: "netdata_docker_containers_health_status_containers_average{dimension=\"unhealthy\"}"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: "{{ $values.B }} container(s) failing health checks"
+          description: "One or more Docker containers are in an unhealthy state. Check: sudo docker ps --filter health=unhealthy"
+        labels:
+          severity: critical
+        isPaused: false
