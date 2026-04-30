@@ -34,6 +34,8 @@ services:
       - /sys:/host/sys:ro
       - /etc/os-release:/host/etc/os-release:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /mnt/nas1:/mnt/nas1:ro
+      - /mnt/data:/mnt/data:ro
     ports:
       - "19999:19999"
     labels:
@@ -83,9 +85,10 @@ services:
       GF_RENDERING_SERVER_URL: "http://grafana-image-renderer:8081/render"
       GF_RENDERING_CALLBACK_URL: "http://grafana:3000/"
       GF_RENDERING_RENDERER_TOKEN: "${GRAFANA_RENDERER_TOKEN}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL}"
     volumes:
       - ${CONFIG_ROOT:-.}/grafana/data:/var/lib/grafana
-      - ${CONFIG_ROOT:-.}/grafana/provisioning:/etc/grafana/provisioning
+      - ${CONFIG_ROOT:-.}/grafana-config/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
       - grafana-image-renderer
