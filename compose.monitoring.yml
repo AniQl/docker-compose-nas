@@ -115,7 +115,7 @@ services:
     environment:
       HTTP_HOST: "0.0.0.0"
       HTTP_PORT: "8081"
-      RENDERER_TOKEN: "${GRAFANA_RENDERER_TOKEN}"
+      AUTH_TOKEN: "${GRAFANA_RENDERER_TOKEN}"
 
   grafana-discord-daily:
     image: python:3.12-slim
