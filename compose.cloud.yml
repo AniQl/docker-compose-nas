@@ -105,7 +105,7 @@ services:
       homepage.widget.key: "${CLOUDFLARE_DNS_API_TOKEN}"
 
   wgeasy:
-    image: ghcr.io/wg-easy/wg-easy:nightly
+    image: ghcr.io/wg-easy/wg-easy:15
     container_name: wgeasy
     restart: unless-stopped
     cap_add:
