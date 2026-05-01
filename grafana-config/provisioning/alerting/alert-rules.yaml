@@ -145,11 +145,7 @@ groups:
               to: 0
             model:
               refId: A
-              expr: |
-                sum(netdata_disk_space_GiB_average{dimension="used", mount_point="/"})
-                /
-                sum(netdata_disk_space_GiB_average{mount_point="/"})
-                * 100
+              expr: "(sum by (mount_point) (netdata_disk_space_GiB_average{dimension=\"used\", mount_point=\"/\"}) / sum by (mount_point) (netdata_disk_space_GiB_average{mount_point=\"/\"})) * 100"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -212,11 +208,7 @@ groups:
               to: 0
             model:
               refId: A
-              expr: |
-                sum(netdata_disk_space_GiB_average{dimension="used", mount_point="/mnt/nas1"})
-                /
-                sum(netdata_disk_space_GiB_average{mount_point="/mnt/nas1"})
-                * 100
+              expr: "(sum by (mount_point) (netdata_disk_space_GiB_average{dimension=\"used\", mount_point=\"/mnt/nas1\"}) / sum by (mount_point) (netdata_disk_space_GiB_average{mount_point=\"/mnt/nas1\"})) * 100"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
