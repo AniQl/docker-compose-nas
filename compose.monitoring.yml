@@ -34,7 +34,7 @@ services:
       - /sys:/host/sys:ro
       - /etc/os-release:/host/etc/os-release:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /mnt/nas1:/host/mnt/nas1:ro
+      - /mnt/nas1:/mnt/nas1:ro
     ports:
       - "19999:19999"
     labels:
