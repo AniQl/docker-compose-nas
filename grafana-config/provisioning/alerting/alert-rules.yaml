@@ -65,7 +65,7 @@ groups:
         for: 5m
         annotations:
           summary: "CPU usage above 85% on {{ $labels.instance }}"
-          description: "CPU usage has been above 85% for more than 5 minutes. Current value: {{ printf \"%.1f\" $values.B.Value }}%"
+          description: "CPU usage has been above 85% for more than 5 minutes. Current value: {{ with $values.B }}{{ printf \"%.1f\" .Value }}{{ else }}N/A{{ end }}%"
         labels:
           severity: warning
         isPaused: false
@@ -128,7 +128,7 @@ groups:
         for: 5m
         annotations:
           summary: "Available RAM below 3200 MiB"
-          description: "Available RAM has been below 3.2 GB for more than 5 minutes. Current: {{ printf \"%.0f\" $values.B.Value }} MiB"
+          description: "Available RAM has been below 3.2 GB for more than 5 minutes. Current: {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}N/A{{ end }} MiB"
         labels:
           severity: warning
         isPaused: false
@@ -191,7 +191,7 @@ groups:
         for: 5m
         annotations:
           summary: "Root disk usage above 85%"
-          description: "Root filesystem (/) is {{ printf \"%.1f\" $values.B.Value }}% full"
+          description: "Root filesystem (/) is {{ with $values.B }}{{ printf \"%.1f\" .Value }}{{ else }}N/A{{ end }}% full"
         labels:
           severity: critical
         isPaused: false
@@ -242,7 +242,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [85]
+                    params: [80]
                   operator:
                     type: and
                   query:
@@ -253,8 +253,8 @@ groups:
         execErrState: Error
         for: 5m
         annotations:
-          summary: "NAS disk (/mnt/nas1) usage above 85%"
-          description: "NAS storage at /mnt/nas1 is {{ printf \"%.1f\" $values.B.Value }}% full"
+          summary: "NAS disk (/mnt/nas1) usage above 80%"
+          description: "NAS storage at /mnt/nas1 is {{ with $values.B }}{{ printf \"%.1f\" .Value }}{{ else }}N/A{{ end }}% full"
         labels:
           severity: critical
         isPaused: false
@@ -317,7 +317,7 @@ groups:
         for: 5m
         annotations:
           summary: "Disk I/O pressure above 50%"
-          description: "Disk I/O full pressure (60s avg) is at {{ printf \"%.1f\" $values.B.Value }}% — system is spending significant time waiting on I/O"
+          description: "Disk I/O full pressure (60s avg) is at {{ with $values.B }}{{ printf \"%.1f\" .Value }}{{ else }}N/A{{ end }}% — system is spending significant time waiting on I/O"
         labels:
           severity: warning
         isPaused: false
@@ -380,7 +380,7 @@ groups:
         for: 2m
         annotations:
           summary: "Network traffic above 100 MB/s"
-          description: "Network throughput is {{ printf \"%.0f\" $values.B.Value }} Kbits/s — unusually high for a homelab"
+          description: "Network throughput is {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}N/A{{ end }} Kbits/s — unusually high for a homelab"
         labels:
           severity: warning
         isPaused: false
@@ -443,7 +443,7 @@ groups:
         for: 5m
         annotations:
           summary: "System load average (5m) above 12"
-          description: "5-minute load average is {{ printf \"%.2f\" $values.B.Value }} — exceeds the number of CPU cores (12)"
+          description: "5-minute load average is {{ with $values.B }}{{ printf \"%.2f\" .Value }}{{ else }}N/A{{ end }} — exceeds the number of CPU cores (12)"
         labels:
           severity: warning
         isPaused: false
@@ -505,7 +505,7 @@ groups:
         execErrState: Error
         for: 1m
         annotations:
-          summary: "{{ printf \"%.0f\" $values.B.Value }} container(s) failing health checks"
+          summary: "{{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}N/A{{ end }} container(s) failing health checks"
           description: "One or more Docker containers are in an unhealthy state. Check: sudo docker ps --filter health=unhealthy"
         labels:
           severity: critical
