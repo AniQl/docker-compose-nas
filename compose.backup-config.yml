@@ -1,0 +1,29 @@
+# Config-only disaster recovery backups.
+#
+# Stores encrypted Restic snapshots directly in Google Drive via rclone.
+# Enable with profile: backup-config
+
+services:
+  config-backup:
+    build:
+      context: ./backup-config
+    container_name: config-backup
+    restart: unless-stopped
+    profiles:
+      - backup-config
+    env_file:
+      - path: ${CONFIG_ROOT:-.}/backup-config/backup.env
+        required: false
+    environment:
+      TZ: ${TIMEZONE}
+      BACKUP_SOURCE_ROOT: /source
+      BACKUP_INCLUDE_FILE: /app/include.txt
+      BACKUP_EXCLUDE_FILE: /app/exclude.txt
+      BACKUP_RESTORE_TARGET: /restore
+      RESTIC_CACHE_DIR: /tmp/restic-cache
+      RCLONE_CACHE_DIR: /tmp/rclone-cache
+      RCLONE_CONFIG: /config/rclone/rclone.conf
+    volumes:
+      - ${CONFIG_ROOT:-.}:/source:ro
+      - ${CONFIG_ROOT:-.}/backup-config/rclone:/config/rclone
+      - ${CONFIG_ROOT:-.}/backup-config/restore:/restore
