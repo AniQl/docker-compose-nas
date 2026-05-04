@@ -1,32 +1,41 @@
-# Config Backup
+# Backrest Config Backup
 
-Config-only disaster recovery backups for this homelab.
+Backrest provides a web UI and scheduler for Restic backups.
 
-The backup service stores encrypted Restic snapshots directly in Google Drive through rclone. It does not create a local Restic repository. Local Restic and rclone caches live under `/tmp` in the container and are removed after each run.
+This stack is for config-only disaster recovery backups. It uses Backrest to manage a Restic repository stored in Google Drive through rclone.
 
-## What It Backs Up
+## Access
 
-- App configuration directories needed to avoid manual reconfiguration.
-- App state databases that are effectively configuration, such as Sonarr/Radarr/Prowlarr/qBittorrent settings.
-- The newest existing Home Assistant backup archive from `homeassistant/backups` as a separate Restic snapshot tag.
-
-It intentionally excludes media roots, downloads, logs, caches, thumbnails, transcodes, Jellyfin artwork metadata, Prometheus TSDB data, and Home Assistant history DB files.
-
-## Setup
-
-Copy the example environment file:
+Start the service with the `backup-config` profile:
 
 ```bash
-cp backup-config/backup.env.example backup-config/backup.env
+docker compose -f compose.backup-config.yml --profile backup-config up -d backrest
 ```
 
-Generate and store a strong Restic password:
+Alternatively, add `compose.backup-config.yml` to `COMPOSE_FILE` and then run `docker compose --profile backup-config up -d backrest`.
 
-```bash
-openssl rand -base64 32
+Backrest is routed through Traefik at:
+
+```text
+https://backrest.${BASE_HOSTNAME}
 ```
 
-Set it in `backup-config/backup.env` as `RESTIC_PASSWORD`.
+The service is also added to Homepage under `Utilities`.
+
+## Persistent Local State
+
+Backrest keeps only its own UI/config/cache state locally:
+
+- `backup-config/backrest/data`
+- `backup-config/backrest/config`
+- `backup-config/backrest/cache`
+- `backup-config/backrest/tmp`
+- `backup-config/rclone`
+- `backup-config/restore`
+
+The Restic backup repository itself should live remotely in Google Drive.
+
+## Required One-Time Setup
 
 Create the rclone config directory:
 
@@ -37,68 +46,186 @@ mkdir -p backup-config/rclone
 Create an rclone remote named `gdrive`:
 
 ```bash
-docker compose -f compose.backup-config.yml run --rm -it config-backup rclone config
+docker compose -f compose.backup-config.yml --profile backup-config run --rm --entrypoint rclone backrest config
 ```
 
-Store both of these outside the machine too:
+Start Backrest:
 
-- `RESTIC_PASSWORD`
+```bash
+docker compose -f compose.backup-config.yml --profile backup-config up -d backrest
+```
+
+Open `https://backrest.${BASE_HOSTNAME}` and complete first-run user setup.
+
+Store these outside this machine:
+
+- Backrest login credentials
+- Restic repository password
 - `backup-config/rclone/rclone.conf`
+- `backup-config/backrest/config/config.json`
 
-Without both, the Google Drive backup cannot be restored after host loss.
+Without the Restic password and rclone config, Google Drive backups cannot be restored after host loss.
 
-## Manual Commands
+## Repository Setup
 
-Run a backup immediately:
+Create a Backrest repository with:
 
-```bash
-docker compose -f compose.backup-config.yml run --rm config-backup backup
+```text
+Repository URI: rclone:gdrive:/docker-compose-nas/config-backups
 ```
 
-List snapshots:
+Use a strong Restic repository password. Store it in a password manager.
 
-```bash
-docker compose -f compose.backup-config.yml run --rm config-backup snapshots
+## Backup Schedule
+
+Set each backup plan schedule to run at 06:00 Europe/Warsaw every 3 days.
+
+Recommended Backrest schedule:
+
+```text
+Policy: Cron
+Cron: 0 6 */3 * *
+Clock: Local
 ```
 
-Check repository health:
+The container timezone defaults to `Europe/Warsaw` through `BACKUP_TIMEZONE`.
 
-```bash
-docker compose -f compose.backup-config.yml run --rm config-backup check
+## Plan: homelab-config
+
+Back up config-only paths from `/source`.
+
+Recommended paths:
+
+```text
+/source/.env
+/source/letsencrypt
+/source/homepage
+/source/adguardhome/conf
+/source/adguardhome/work
+/source/sonarr
+/source/radarr
+/source/prowlarr
+/source/bazarr
+/source/lidarr
+/source/seerr
+/source/qbittorrent
+/source/autobrr
+/source/cross-seed
+/source/sabnzbd
+/source/pia
+/source/pia-shared
+/source/cleanuparr
+/source/homeassistant/.storage
+/source/homeassistant/automations.yaml
+/source/homeassistant/configuration.yaml
+/source/homeassistant/scenes.yaml
+/source/homeassistant/scripts.yaml
+/source/homeassistant/secrets.yaml
+/source/homeassistant/custom_components
+/source/homeassistant/www
+/source/homeassistant/blueprints
+/source/homeassistant/zigbee.db
+/source/homeassistant/mosquitto/config
+/source/mqtt/config
+/source/zigbee2mqtt
+/source/matter-data
+/source/wg-easy
+/source/portainer
+/source/prometheus/prometheus.yml
+/source/grafana/data/grafana.db
+/source/grafana-config
+/source/netdata/config
+/source/frigate/config.yaml
+/source/frigate/frigate.db
+/source/frigate/backup.db
+/source/asterisk
+/source/speedtest-tracker
+/source/jellyfin/database.xml
+/source/jellyfin/encoding.xml
+/source/jellyfin/network.xml
+/source/jellyfin/system.xml
+/source/jellyfin/logging.default.json
+/source/jellyfin/data/data/jellyfin.db
+/source/jellyfin/data/data/library.db
+/source/jellyfin/data/data/library.db-shm
+/source/jellyfin/data/data/library.db-wal
+/source/jellyfin/data/data/ScheduledTasks
+/source/jellyfin/data/data/playlists
+/source/jellyfin/data/plugins
+/source/calibre-web
 ```
 
-Restore latest snapshot to `backup-config/restore`:
+Recommended excludes:
 
-```bash
-docker compose -f compose.backup-config.yml run --rm config-backup restore latest
+```text
+**/logs/**
+**/*.log
+**/*.log.*
+**/logs.db*
+**/cache/**
+**/*cache*/**
+**/Cache/**
+**/Sentry/**
+**/Backups/**
+**/MediaCover/**
+**/metadata/**
+**/Metadata/**
+**/subtitles/**
+**/transcodes/**
+**/Transcodes/**
+**/home-assistant_v2.db*
+**/homeassistant/backups/**
+**/homeassistant/deps/**
+**/homeassistant/tts/**
+**/homeassistant/media/**
+**/jellyfin/cache/**
+**/jellyfin/data/metadata/**
+**/jellyfin/data/data/subtitles/**
+**/jellyfin/data/data/SQLiteBackups/**
+**/jellyfin/log/**
+**/frigate/model_cache/**
+**/frigate/clips/**
+**/frigate/recordings/**
+**/frigate/exports/**
+**/prometheus/data/**
+**/netdata/cache/**
+**/netdata/lib/**
 ```
 
-Print the resolved config include list and latest Home Assistant backup path:
+Recommended retention:
 
-```bash
-docker compose -f compose.backup-config.yml run --rm config-backup list
+```text
+Keep daily: 14
+Keep weekly: 8
+Keep monthly: 12
 ```
 
-## Scheduled Service
+## Plan: homeassistant-backups
 
-Add `compose.backup-config.yml` to `COMPOSE_FILE`, then append `backup-config` to `COMPOSE_PROFILES`:
+Back up Home Assistant backup archives separately:
 
-```env
-COMPOSE_PROFILES=existing-profiles,backup-config
+```text
+/source/homeassistant/backups
 ```
 
-Or start it explicitly:
+Recommended retention:
 
-```bash
-docker compose -f compose.backup-config.yml --profile backup-config up -d config-backup
+```text
+Keep last: 3
 ```
 
-The default schedule is `30 3 * * *`, configured by `BACKUP_CRON` in `backup-config/backup.env`.
+Home Assistant backup tar files are already compressed, so keep fewer snapshots than the config plan.
 
-## Snapshot Tags
+## Restore Target
 
-- `config`: strict config-only backup set.
-- `homeassistant-backup`: newest Home Assistant backup tar.
-- `homelab`: common tag on both snapshot groups.
+Restore files into:
 
-Retention is applied separately for config snapshots and Home Assistant backup archive snapshots.
+```text
+/restore
+```
+
+That maps to:
+
+```text
+backup-config/restore
+```

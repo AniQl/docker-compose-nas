@@ -53,7 +53,7 @@ compose.verbose.txt
 compose-diff-*/
 home_server.zip
 
-# Config backup local secrets and restore output
-/backup-config/backup.env
+# Config backup local state, secrets and restore output
+/backup-config/backrest/
 /backup-config/rclone/
 /backup-config/restore/
