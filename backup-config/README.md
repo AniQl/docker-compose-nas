@@ -66,7 +66,51 @@ Store these outside this machine:
 
 Without the Restic password and rclone config, Google Drive backups cannot be restored after host loss.
 
-## Repository Setup
+## Automated Repository and Plan Setup
+
+After rclone and first-run Backrest user setup, configure the repository and both backup plans with:
+
+```bash
+BACKREST_URL="https://backrest.${BASE_HOSTNAME}" ./backup-config/configure-backrest.sh
+```
+
+The script prompts for:
+
+- Backrest username
+- Backrest password
+- Restic repository password
+
+It creates or updates:
+
+- repository `gdrive-config`
+- plan `homelab-config`
+- plan `homeassistant-backups`
+- backup schedule `0 6 */3 * *`
+- config retention: 14 daily, 8 weekly, 12 monthly
+- Home Assistant backup retention: keep last 3
+- repository prune/check maintenance policies
+
+Use `BACKREST_DRY_RUN=true` to preview the generated config without writing it:
+
+```bash
+BACKREST_DRY_RUN=true BACKREST_URL="https://backrest.${BASE_HOSTNAME}" ./backup-config/configure-backrest.sh
+```
+
+You can also provide credentials through environment variables for non-interactive usage:
+
+```bash
+BACKREST_URL="https://backrest.${BASE_HOSTNAME}" \
+BACKREST_USERNAME="admin" \
+BACKREST_PASSWORD="<backrest-password>" \
+RESTIC_PASSWORD="<restic-repository-password>" \
+./backup-config/configure-backrest.sh
+```
+
+Prefer prompts over inline secrets when possible, so passwords do not land in shell history.
+
+## Manual Repository Setup
+
+If you prefer to configure Backrest manually, use the settings below.
 
 Create a Backrest repository with:
 
@@ -155,6 +199,8 @@ Recommended paths:
 /source/calibre-web
 ```
 
+The same list is available in `backup-config/homelab-config-paths.txt`.
+
 Recommended excludes:
 
 ```text
@@ -191,6 +237,8 @@ Recommended excludes:
 **/netdata/cache/**
 **/netdata/lib/**
 ```
+
+The same list is available in `backup-config/homelab-config-excludes.txt`.
 
 Recommended retention:
 
