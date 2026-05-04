@@ -140,66 +140,14 @@ Back up config-only paths from `/source`.
 
 Recommended paths:
 
-```text
-/source/.env
-/source/letsencrypt
-/source/homepage
-/source/adguardhome/conf
-/source/adguardhome/work
-/source/sonarr
-/source/radarr
-/source/prowlarr
-/source/bazarr
-/source/lidarr
-/source/seerr
-/source/qbittorrent
-/source/autobrr
-/source/cross-seed
-/source/sabnzbd
-/source/pia
-/source/pia-shared
-/source/cleanuparr
-/source/homeassistant/.storage
-/source/homeassistant/automations.yaml
-/source/homeassistant/configuration.yaml
-/source/homeassistant/scenes.yaml
-/source/homeassistant/scripts.yaml
-/source/homeassistant/secrets.yaml
-/source/homeassistant/custom_components
-/source/homeassistant/www
-/source/homeassistant/blueprints
-/source/homeassistant/zigbee.db
-/source/homeassistant/mosquitto/config
-/source/mqtt/config
-/source/zigbee2mqtt
-/source/matter-data
-/source/wg-easy
-/source/portainer
-/source/prometheus/prometheus.yml
-/source/grafana/data/grafana.db
-/source/grafana-config
-/source/netdata/config
-/source/frigate/config.yaml
-/source/frigate/frigate.db
-/source/frigate/backup.db
-/source/asterisk
-/source/speedtest-tracker
-/source/jellyfin/database.xml
-/source/jellyfin/encoding.xml
-/source/jellyfin/network.xml
-/source/jellyfin/system.xml
-/source/jellyfin/logging.default.json
-/source/jellyfin/data/data/jellyfin.db
-/source/jellyfin/data/data/library.db
-/source/jellyfin/data/data/library.db-shm
-/source/jellyfin/data/data/library.db-wal
-/source/jellyfin/data/data/ScheduledTasks
-/source/jellyfin/data/data/playlists
-/source/jellyfin/data/plugins
-/source/calibre-web
-```
+See `backup-config/homelab-config-paths.txt`.
 
-The same list is available in `backup-config/homelab-config-paths.txt`.
+This includes:
+
+- active media/home automation configs (`sonarr`, `radarr`, `prowlarr`, `bazarr`, `lidarr`, `qbittorrent`, `seerr`, `cross-seed`, `autobrr`, `cleanuparr`)
+- infrastructure config/state (`letsencrypt`, `wg-easy`, `prometheus/prometheus.yml`, `netdata/config`, `portainer`, `grafana-config`, `grafana/data/grafana.db`)
+- Backrest/bootstrap secrets (`backup-config/backrest/config/config.json`, `backup-config/rclone/rclone.conf`, `cloudflared`)
+- model/config volume state for Ollama (`/ollama-data`)
 
 Recommended excludes:
 

@@ -17,6 +17,8 @@ services:
       XDG_CACHE_HOME: /cache
     volumes:
       - ${CONFIG_ROOT:-.}:/source:ro
+      - ${CLOUDFLARED_DIR:-~/.cloudflared}:/cloudflared:ro
+      - ollama-data:/ollama-data:ro
       - ${CONFIG_ROOT:-.}/backup-config/backrest/data:/data
       - ${CONFIG_ROOT:-.}/backup-config/backrest/config:/config
       - ${CONFIG_ROOT:-.}/backup-config/backrest/cache:/cache
@@ -40,3 +42,6 @@ services:
 networks:
   default:
     name: docker-compose-nas
+
+volumes:
+  ollama-data:
