@@ -88,16 +88,16 @@ main() {
   require_command curl
   require_command jq
 
-  if [ "${BACKREST_NO_AUTH:-false}" != "true" ]; then
-    prompt_if_missing BACKREST_USERNAME 'Backrest username: '
-    prompt_if_missing BACKREST_PASSWORD 'Backrest password: ' true
-  fi
-  prompt_if_missing RESTIC_PASSWORD 'Restic repository password: ' true
-
   local paths_json
   local excludes_json
   local current_config
   local next_config
+  local existing_repo_password
+
+  if [ "${BACKREST_NO_AUTH:-false}" != "true" ]; then
+    prompt_if_missing BACKREST_USERNAME 'Backrest username: '
+    prompt_if_missing BACKREST_PASSWORD 'Backrest password: ' true
+  fi
 
   paths_json="$(json_array_from_file "$BACKREST_PATHS_FILE")"
   excludes_json="$(json_array_from_file "$BACKREST_EXCLUDES_FILE")"
@@ -105,12 +105,17 @@ main() {
   log "Fetching current Backrest config from ${BACKREST_URL}"
   current_config="$(curl_backrest 'v1.Backrest/GetConfig' '{}')"
 
+  existing_repo_password="$(jq -r --arg repoId "$BACKREST_REPO_ID" '[.repos[]? | select(.id == $repoId)][0].password // ""' <<< "$current_config")"
+  if [ -z "${RESTIC_PASSWORD:-}" ] && [ -z "$existing_repo_password" ]; then
+    prompt_if_missing RESTIC_PASSWORD 'Restic repository password: ' true
+  fi
+
   log "Building Backrest repository and backup plans"
   next_config="$(jq \
     --arg instance "$BACKREST_INSTANCE" \
     --arg repoId "$BACKREST_REPO_ID" \
     --arg repoUri "$BACKREST_REPO_URI" \
-    --arg repoPassword "$RESTIC_PASSWORD" \
+    --arg repoPassword "${RESTIC_PASSWORD:-}" \
     --arg backupCron "$BACKREST_BACKUP_CRON" \
     --arg pruneCron "$BACKREST_PRUNE_CRON" \
     --arg checkCron "$BACKREST_CHECK_CRON" \
@@ -128,14 +133,16 @@ main() {
             $items + [$item]
           end;
 
-      {
+      ([.repos[]? | select(.id == $repoId)][0] // {}) as $existingRepo
+      | ($existingRepo.guid // "") as $existingGuid
+      | ($existingRepo + {
         id: $repoId,
         uri: $repoUri,
-        password: $repoPassword,
-        env: [],
-        flags: [],
+        password: (if $repoPassword != "" then $repoPassword else ($existingRepo.password // "") end),
+        env: ($existingRepo.env // []),
+        flags: ($existingRepo.flags // []),
         autoUnlock: true,
-        autoInitialize: true,
+        autoInitialize: (if $existingGuid == "" then true else false end),
         prunePolicy: {
           schedule: {
             cron: $pruneCron,
@@ -150,7 +157,7 @@ main() {
           },
           structureOnly: true
         }
-      } as $repo
+      }) as $repo
 
       | {
         id: $configPlanId,
