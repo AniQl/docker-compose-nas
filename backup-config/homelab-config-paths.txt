@@ -32,11 +32,10 @@
 /source/zigbee2mqtt
 /source/matter-data
 /source/wg-easy
-/source/portainer
-/source/prometheus/prometheus.yml
-/source/grafana/data/grafana.db
+/data-app/portainer
+/data-app/Prometheus/prometheus.yml
 /source/grafana-config
-/source/netdata/config
+/data-app/Netdata/config
 /source/frigate/config.yaml
 /source/frigate/frigate.db
 /source/frigate/frigate.db-shm
@@ -44,7 +43,7 @@
 /source/frigate/backup.db
 /source/asterisk
 /source/speedtest-tracker
-/source/grafana-discord-daily/post.py
+/data-app/GrafanaDiscordDaily/post.py
 /source/jellyfin/database.xml
 /source/jellyfin/encoding.xml
 /source/jellyfin/network.xml
@@ -56,3 +55,4 @@
 /source/jellyfin/data/data/ScheduledTasks
 /source/jellyfin/data/data/playlists
 /source/jellyfin/data/plugins
+/data-app/Grafana/data/grafana.db
