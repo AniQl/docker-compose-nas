@@ -19,6 +19,7 @@ services:
       - ${CONFIG_ROOT:-.}:/source:ro
       - ${CLOUDFLARED_DIR:-~/.cloudflared}:/cloudflared:ro
       - ollama-data:/ollama-data:ro
+      - /DATA/AppData:/data-app:ro
       - ${CONFIG_ROOT:-.}/backup-config/backrest/data:/data
       - ${CONFIG_ROOT:-.}/backup-config/backrest/config:/config
       - ${CONFIG_ROOT:-.}/backup-config/backrest/cache:/cache
