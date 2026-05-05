@@ -4,7 +4,6 @@
 /source/letsencrypt
 /source/homepage
 /cloudflared
-/ollama-data
 /source/sonarr
 /source/radarr
 /source/prowlarr

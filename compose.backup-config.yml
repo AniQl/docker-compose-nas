@@ -18,7 +18,6 @@ services:
     volumes:
       - ${CONFIG_ROOT:-.}:/source:ro
       - ${CLOUDFLARED_DIR:-~/.cloudflared}:/cloudflared:ro
-      - ollama-data:/ollama-data:ro
       - /DATA/AppData:/data-app:ro
       - ${CONFIG_ROOT:-.}/backup-config/backrest/data:/data
       - ${CONFIG_ROOT:-.}/backup-config/backrest/config:/config
@@ -43,6 +42,3 @@ services:
 networks:
   default:
     name: docker-compose-nas
-
-volumes:
-  ollama-data:
