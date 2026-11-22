@@ -105,7 +105,7 @@ services:
       homepage.widget.key: "${CLOUDFLARE_DNS_API_TOKEN}"
 
   wgeasy:
-    image: ghcr.io/wg-easy/wg-easy:nightly
+    image: ghcr.io/wg-easy/wg-easy:15
     container_name: wgeasy
     restart: unless-stopped
     cap_add:
@@ -133,6 +133,7 @@ services:
       INIT_USERNAME: "admin"
       INIT_PASSWORD: "${WGEASY_UI_PASSWORD}"
       ENABLE_PROMETHEUS_METRICS: "true"
+      DISABLE_IPV6: "true"
     labels:
       traefik.enable: "true"
       traefik.http.routers.wgeasy.rule: "Host(`wg-ui.${BASE_HOSTNAME}`)"
