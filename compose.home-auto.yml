@@ -41,6 +41,14 @@ services:
       TZ: "${TIMEZONE}"
     devices:
       - "${ZIGBEE_ADAPTER_PATH:-/dev/ttyUSB0}:/dev/ttyUSB0"
+    # Detects the stuck-dongle state (incoming works, outgoing dead); the
+    # autoheal container restarts the container when this turns unhealthy.
+    healthcheck:
+      test: ["CMD", "node", "/app/data/healthcheck.js"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 300s
     labels:
       homepage.group: "Home Automation"
       homepage.name: "Zigbee2MQTT"
