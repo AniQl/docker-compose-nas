@@ -1,0 +1,44 @@
+# Backrest web UI for config-only disaster recovery backups.
+# Enable with profile: backup-config
+
+services:
+  backrest:
+    image: ghcr.io/garethgeorge/backrest:latest
+    container_name: backrest
+    restart: unless-stopped
+    profiles:
+      - backup-config
+    environment:
+      BACKREST_DATA: /data
+      BACKREST_CONFIG: /config/config.json
+      BACKREST_PORT: 0.0.0.0:9898
+      TMPDIR: /tmp
+      TZ: ${BACKUP_TIMEZONE:-Europe/Warsaw}
+      XDG_CACHE_HOME: /cache
+    volumes:
+      - ${CONFIG_ROOT:-.}:/source:ro
+      - ${CLOUDFLARED_DIR:-~/.cloudflared}:/cloudflared:ro
+      - /DATA/AppData:/data-app:ro
+      - ${CONFIG_ROOT:-.}/backup-config/backrest/data:/data
+      - ${CONFIG_ROOT:-.}/backup-config/backrest/config:/config
+      - ${CONFIG_ROOT:-.}/backup-config/backrest/cache:/cache
+      - ${CONFIG_ROOT:-.}/backup-config/backrest/tmp:/tmp
+      - ${CONFIG_ROOT:-.}/backup-config/rclone:/root/.config/rclone
+      - ${CONFIG_ROOT:-.}/backup-config/restore:/restore
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.backrest.rule: "Host(`backrest.${BASE_HOSTNAME}`)"
+      traefik.http.routers.backrest.entrypoints: "web-secure"
+      traefik.http.routers.backrest.tls: "true"
+      traefik.http.routers.backrest.tls.certresolver: "myresolver"
+      traefik.http.services.backrest.loadbalancer.server.port: "9898"
+      homepage.group: "Utilities"
+      homepage.name: "Backrest"
+      homepage.icon: "backrest.png"
+      homepage.href: "https://backrest.${BASE_HOSTNAME}"
+      homepage.description: "Restic backup UI"
+      homepage.weight: "10"
+
+networks:
+  default:
+    name: docker-compose-nas
