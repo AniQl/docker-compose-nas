@@ -9,7 +9,7 @@ services:
         published: 6667
         protocol: udp
         mode: host
-    image: ghcr.io/home-assistant/home-assistant:2025.10.1
+    image: ghcr.io/home-assistant/home-assistant:2026.11.2
     container_name: homeassistant
     network_mode: host
     environment:
